@@ -13,7 +13,12 @@
       "mcp__UnityMCP__refresh_unity",
       "Skill(update-config)",
       "Bash(claude mcp *)",
-      "PowerShell(Get-Process *)"
+      "PowerShell(Get-Process *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\bmbm7\\\\bowling demo\\\\bowlling-game\\\\Assets\" -Recurse -Directory -Filter \"Materials\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "mcp__UnityMCP__manage_material",
+      "mcp__UnityMCP__manage_camera",
+      "mcp__UnityMCP__execute_menu_item"
     ]
   }
 }
