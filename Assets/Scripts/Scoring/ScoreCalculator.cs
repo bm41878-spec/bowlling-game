@@ -1,22 +1,95 @@
-// TODO: Phase 4 — 전통 볼링 점수 계산 구현, 섹션 9 테스트 케이스로 검증
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BowlingGame
 {
     public class ScoreCalculator
     {
-        // 지정 프레임의 확정 점수를 반환. 보너스 투구가 아직 없으면 null.
-        public int? CalculateFrameScore(List<Frame> frames, int targetIndex, int frameCount)
+        public int? CalculateFrameScore(List<Frame> frames, int targetIndex, int totalFrameCount)
         {
-            // TODO: isLast 판정 후 일반/마지막 프레임 분기 처리
-            throw new System.NotImplementedException();
+            if (frames == null || totalFrameCount <= 0)
+                throw new ArgumentException("frames가 null이거나 totalFrameCount가 0 이하입니다.");
+            if (targetIndex < 0 || targetIndex >= totalFrameCount)
+                throw new ArgumentOutOfRangeException(nameof(targetIndex));
+
+            bool isLast = (targetIndex == totalFrameCount - 1);
+            Frame f = frames[targetIndex];
+
+            if (isLast)
+            {
+                if (f.IsComplete(true))
+                    return f.GetRollsArray().Sum();
+                return null;
+            }
+
+            if (f.IsStrike())
+            {
+                List<int> future = GetFutureRolls(frames, targetIndex, totalFrameCount, 2);
+                if (future.Count == 2)
+                    return 10 + future[0] + future[1];
+                return null;
+            }
+
+            if (f.IsSpare())
+            {
+                List<int> future = GetFutureRolls(frames, targetIndex, totalFrameCount, 1);
+                if (future.Count == 1)
+                    return 10 + future[0];
+                return null;
+            }
+
+            if (f.SecondRoll >= 0)
+                return f.FirstRoll + f.SecondRoll;
+            return null;
         }
 
-        // 모든 프레임의 누적 점수 배열을 반환. 미확정 프레임은 null.
-        public int?[] CalculateCumulativeScores(List<Frame> frames, int frameCount)
+        private List<int> GetFutureRolls(List<Frame> frames, int fromFrameIndex, int totalFrameCount, int count)
         {
-            // TODO: CalculateFrameScore를 순서대로 호출해 누적합 계산
-            throw new System.NotImplementedException();
+            var collected = new List<int>(count);
+            for (int i = fromFrameIndex + 1; i < totalFrameCount && i < frames.Count; i++)
+            {
+                int[] rolls = frames[i].GetRollsArray();
+                for (int r = 0; r < rolls.Length && collected.Count < count; r++)
+                    collected.Add(rolls[r]);
+                if (collected.Count >= count) break;
+            }
+            if (collected.Count < count)
+                return new List<int>();
+            return collected;
         }
+
+        public List<int?> CalculateCumulativeScores(List<Frame> frames, int totalFrameCount)
+        {
+            if (frames == null || totalFrameCount <= 0)
+                throw new ArgumentException("frames가 null이거나 totalFrameCount가 0 이하입니다.");
+
+            var result = new List<int?>(totalFrameCount);
+            int cumulative = 0;
+            bool broken = false;
+            for (int i = 0; i < totalFrameCount; i++)
+            {
+                if (broken)
+                {
+                    result.Add(null);
+                    continue;
+                }
+
+                int? frameScore = CalculateFrameScore(frames, i, totalFrameCount);
+                if (frameScore == null)
+                {
+                    broken = true;
+                    result.Add(null);
+                }
+                else
+                {
+                    cumulative += frameScore.Value;
+                    result.Add(cumulative);
+                }
+            }
+            return result;
+        }
+
+        public int GetPerfectScore(int totalFrameCount) => 30 * totalFrameCount;
     }
 }
