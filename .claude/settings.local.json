@@ -18,7 +18,8 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "mcp__UnityMCP__manage_material",
       "mcp__UnityMCP__manage_camera",
-      "mcp__UnityMCP__execute_menu_item"
+      "mcp__UnityMCP__execute_menu_item",
+      "mcp__UnityMCP__set_active_instance"
     ]
   }
 }
