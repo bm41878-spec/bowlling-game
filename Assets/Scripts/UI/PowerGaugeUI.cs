@@ -14,6 +14,7 @@ namespace BowlingGame
 
         private float pingPongTime = 0f;
         private float currentNormalized = 0f;
+        private int enteredFrame = -1;
         public float ConfirmedNormalized { get; private set; }
 
         private GameStateManager stateManager;
@@ -61,6 +62,9 @@ namespace BowlingGame
             {
                 gameObject.SetActive(true);
                 pingPongTime = 0f;
+                // 같은 프레임에 전이가 일어났다면 진입 직후의 confirm 입력은 무시한다
+                // (BallAimer가 동일 입력 이벤트로 AimingPosition→AimingPower 전이를 트리거할 수 있음)
+                enteredFrame = Time.frameCount;
             }
             if (prev == GameState.AimingPower)
                 gameObject.SetActive(false);
@@ -69,6 +73,7 @@ namespace BowlingGame
         private void OnConfirmInput()
         {
             if (stateManager.CurrentState != GameState.AimingPower) return;
+            if (Time.frameCount == enteredFrame) return;
 
             ConfirmedNormalized = currentNormalized;
             Debug.Log($"[PowerGauge] 세기 확정: {ConfirmedNormalized * 100:F1}%");

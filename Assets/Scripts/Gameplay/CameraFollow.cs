@@ -7,6 +7,7 @@ namespace BowlingGame
         [SerializeField] private Vector3 stopPosition     = new Vector3(0f, 1.70000005f, 12f);
         [SerializeField] private float   followSmoothTime = 0.25f;
         [SerializeField] private float   returnSmoothTime = 0.4f;
+        [SerializeField] private float   stopOffsetFromHeadPin = 2.4f;
 
         // ✅ [추가] SerializeField 대신 const → 컴파일 타임 인라인, 매 프레임 필드 조회 비용 제거
         private const float FollowOffsetZ = 1.7f;
@@ -28,6 +29,16 @@ namespace BowlingGame
 
             var ball = FindFirstObjectByType<BowlingBall>();
             if (ball != null) ballTransform = ball.transform;
+
+            // head pin(Pin_01) 기준으로 정지 Z를 자동 계산
+            foreach (var pin in FindObjectsByType<Pin>(FindObjectsSortMode.None))
+            {
+                if (pin.pinId == 1)
+                {
+                    stopPosition.z = pin.transform.position.z - stopOffsetFromHeadPin;
+                    break;
+                }
+            }
 
             stateManager = GameStateManager.Instance;
             if (stateManager != null)

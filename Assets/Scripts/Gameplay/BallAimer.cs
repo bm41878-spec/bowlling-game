@@ -13,6 +13,7 @@ namespace BowlingGame
         private Rigidbody rb;
         private float pingPongTime = 0f;
         private bool isAiming = false;
+        private int enteredFrame = -1;
         private Vector3 confirmedPosition;
 
         public Vector3 ConfirmedPosition => confirmedPosition;
@@ -41,6 +42,8 @@ namespace BowlingGame
             {
                 isAiming = true;
                 pingPongTime = 0f;
+                // 동일 프레임 confirm 캐스케이드 방지 (다른 핸들러가 이 프레임에 상태를 AimingPosition으로 바꿨을 수 있음)
+                enteredFrame = Time.frameCount;
                 // 물리 엔진이 transform 직접 제어를 방해하지 않도록 kinematic 전환
                 if (rb != null) { rb.linearVelocity = Vector3.zero; rb.isKinematic = true; }
             }
@@ -55,6 +58,7 @@ namespace BowlingGame
         private void OnConfirmInput()
         {
             if (stateManager.CurrentState != GameState.AimingPosition) return;
+            if (Time.frameCount == enteredFrame) return;
 
             confirmedPosition = transform.position;
             Debug.Log($"[BallAimer] 위치 확정: {confirmedPosition.x:F3}");
