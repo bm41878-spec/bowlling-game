@@ -28,7 +28,11 @@
       "mcp__UnityMCP__manage_scriptable_object",
       "mcp__UnityMCP__validate_script",
       "PowerShell($wordPath = \"C:\\\\Users\\\\bmbm7\\\\Desktop\\\\bowlling-game\\\\볼링_점수계산_시스템_명세서.docx\"; try { $word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open\\($wordPath\\); $text = $doc.Content.Text; $doc.Close\\($false\\); $word.Quit\\(\\); $text } catch { Write-Output \"ERROR: $\\($_.Exception.Message\\)\" })",
-      "PowerShell($wordPath = \"C:\\\\Users\\\\bmbm7\\\\Desktop\\\\bowlling-game\\\\볼링게임프로젝트.docx\"; try { $word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open\\($wordPath\\); $text = $doc.Content.Text; $doc.Close\\($false\\); $word.Quit\\(\\); $text } catch { Write-Output \"ERROR: $\\($_.Exception.Message\\)\" })"
+      "PowerShell($wordPath = \"C:\\\\Users\\\\bmbm7\\\\Desktop\\\\bowlling-game\\\\볼링게임프로젝트.docx\"; try { $word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open\\($wordPath\\); $text = $doc.Content.Text; $doc.Close\\($false\\); $word.Quit\\(\\); $text } catch { Write-Output \"ERROR: $\\($_.Exception.Message\\)\" })",
+      "Bash(git --no-pager diff ProjectSettings/EditorBuildSettings.asset)",
+      "Bash(git diff *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
