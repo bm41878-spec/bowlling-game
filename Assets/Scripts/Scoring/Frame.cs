@@ -1,83 +1,39 @@
-using System;
-using System.Collections.Generic;
-
-namespace BowlingGame
+namespace Bowling.Scoring
 {
+    /// <summary>
+    /// 한 프레임의 투구 결과와 점수를 담는 데이터 객체(POCO).
+    /// 점수 계산 로직은 ScoreCalculator가 담당하며, 이 클래스는 상태만 보관한다.
+    /// 외부에서의 임의 수정을 막기 위해 setter는 internal 로 제한한다.
+    /// </summary>
     public class Frame
     {
-        public int FrameIndex { get; }
-        public int FirstRoll { get; private set; } = -1;
-        public int SecondRoll { get; private set; } = -1;
-        public int ThirdRoll { get; private set; } = -1;
-        public int? ConfirmedScore { get; set; }
+        /// <summary>첫 번째 투구에서 쓰러뜨린 핀 개수.</summary>
+        public int Ball1 { get; internal set; }
 
-        // 이벤트 중복 방지용 내부 플래그
-#pragma warning disable CS0414
-        private bool _firstFallen = false;
-#pragma warning restore CS0414
+        /// <summary>두 번째 투구에서 쓰러뜨린 핀 개수. 스트라이크인 경우 0으로 유지.</summary>
+        public int Ball2 { get; internal set; }
 
-        public Frame(int frameIndex)
+        /// <summary>프레임 종류(Normal / Spare / Strike).</summary>
+        public FrameType FrameType { get; internal set; }
+
+        /// <summary>이 프레임의 최종 점수(보너스 포함).</summary>
+        public int FrameScore { get; internal set; }
+
+        /// <summary>
+        /// 초기 상태: 모든 핀 카운트 0, FrameType.Normal, 점수 0.
+        /// </summary>
+        public Frame()
         {
-            FrameIndex = frameIndex;
+            Ball1 = 0;
+            Ball2 = 0;
+            FrameType = FrameType.Normal;
+            FrameScore = 0;
         }
 
-        public bool IsStrike() => FirstRoll == 10;
-        public bool IsSpare() => !IsStrike() && FirstRoll + SecondRoll == 10;
-        public bool IsOpen() => !IsStrike() && !IsSpare() && FirstRoll >= 0 && SecondRoll >= 0;
+        /// <summary>스트라이크 여부.</summary>
+        public bool IsStrike() => FrameType == FrameType.Strike;
 
-        public bool IsComplete(bool isLastFrame)
-        {
-            if (isLastFrame)
-            {
-                if (IsStrike() || IsSpare())
-                    return ThirdRoll >= 0;
-                return SecondRoll >= 0;
-            }
-
-            if (IsStrike())
-                return FirstRoll >= 0;
-            return SecondRoll >= 0;
-        }
-
-        public void RecordRoll(int pins)
-        {
-            if (pins < 0 || pins > 10)
-                throw new InvalidOperationException("유효하지 않은 핀 수");
-
-            if (FirstRoll < 0)
-            {
-                FirstRoll = pins;
-                return;
-            }
-
-            if (SecondRoll < 0)
-            {
-                // Strike 후속(마지막 프레임 보너스)이 아니면 합이 10을 넘을 수 없음
-                if (FirstRoll != 10 && FirstRoll + pins > 10)
-                    throw new InvalidOperationException("유효하지 않은 핀 수");
-                SecondRoll = pins;
-                return;
-            }
-
-            if (ThirdRoll < 0)
-            {
-                // 마지막 프레임에서 Strike 또는 Spare인 경우에만 허용
-                if (!IsStrike() && !IsSpare())
-                    throw new InvalidOperationException("유효하지 않은 핀 수");
-                ThirdRoll = pins;
-                return;
-            }
-
-            throw new InvalidOperationException("유효하지 않은 핀 수");
-        }
-
-        public int[] GetRollsArray()
-        {
-            var list = new List<int>(3);
-            if (FirstRoll >= 0) list.Add(FirstRoll);
-            if (SecondRoll >= 0) list.Add(SecondRoll);
-            if (ThirdRoll >= 0) list.Add(ThirdRoll);
-            return list.ToArray();
-        }
+        /// <summary>스페어 여부.</summary>
+        public bool IsSpare() => FrameType == FrameType.Spare;
     }
 }

@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 
 namespace BowlingGame
@@ -58,15 +57,7 @@ namespace BowlingGame
             Launch(launchPos, force);
 
             Debug.Log($"[Ball] 발사! 위치: {launchPos.x:F2}, 세기: {force * 100:F1}%");
-            StartCoroutine(WaitUntilStopped());
-        }
-
-        private IEnumerator WaitUntilStopped()
-        {
-            yield return new WaitForSeconds(1.5f);
-            yield return new WaitUntil(() => !IsRolling);
-            Debug.Log("[Ball] 정지 감지 → Scoring 전환");
-            stateManager.ChangeState(GameState.Scoring);
+            // Scoring 전이는 GameManager 가 PhysicsSettleDetector.OnSettled 를 받아 처리한다.
         }
 
         public void Launch(Vector3 startPos, float normalizedForce)
@@ -80,13 +71,28 @@ namespace BowlingGame
 
         public void ResetBall(Vector3 position)
         {
+            // 동적 바디일 때 velocity 0 → 이후 kinematic 으로 이동/회전 → 다시 동적 복귀.
+            // (kinematic 상태에서 velocity 설정 시 Unity 경고 발생하므로 순서 중요)
+            if (!rb.isKinematic)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
             rb.isKinematic = true;
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
             transform.position = position;
             transform.rotation = Quaternion.identity;
             rb.isKinematic = false;
             hasLaunched = false;
+        }
+
+        // BallController 분리 전 임시 래퍼 — ThrowTransitionController 등 조정자 코드의 호출 지점을 안정화한다.
+        public void ResetToStartPosition()
+        {
+            var spawnPoint = GameObject.Find("BallSpawnPoint");
+            Vector3 resetPos = spawnPoint != null
+                ? spawnPoint.transform.position
+                : new Vector3(0f, 0.15f, 0.5f);
+            ResetBall(resetPos);
         }
 
         public bool IsInGutter => Mathf.Abs(transform.position.x) > 0.533f;

@@ -27,7 +27,7 @@ namespace BowlingGame
         void Start()
         {
             inputController = InputController.Instance;
-            ChangeState(GameState.AimingPosition);
+            // 첫 상태 전이는 GameManager 가 BeginGame() 에서 트리거한다 — 여기서는 Ready 상태로 대기.
         }
 
         public void ChangeState(GameState newState)

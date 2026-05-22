@@ -22,7 +22,10 @@
       "mcp__UnityMCP__set_active_instance",
       "mcp__UnityMCP__manage_asset",
       "Bash(grep -aoE \"[A-Za-z][A-Za-z0-9_]{2,30}\" \"/c/Users/bmbm7/bowling demo/bowlling-game/Assets/matarial/Bowling.fbx\")",
-      "Bash(xargs -I {} sh -c 'head -c 200 \"{}\" 2>/dev/null | grep -l \"Ball\\\\|Pin\" 2>/dev/null && echo {}')"
+      "Bash(xargs -I {} sh -c 'head -c 200 \"{}\" 2>/dev/null | grep -l \"Ball\\\\|Pin\" 2>/dev/null && echo {}')",
+      "mcp__UnityMCP__run_tests",
+      "mcp__UnityMCP__get_test_job",
+      "mcp__UnityMCP__manage_scriptable_object"
     ]
   }
 }

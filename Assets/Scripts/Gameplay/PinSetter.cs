@@ -42,7 +42,7 @@ namespace BowlingGame
         public bool GetAllPinsSleeping()
         {
             foreach (var pin in activePins)
-                if (pin != null && !pin.IsSleeping()) return false;
+                if (pin != null && !pin.IsAtRest()) return false;
             return true;
         }
 
