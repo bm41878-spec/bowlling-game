@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using UnityEngine;
 
 namespace BowlingGame
@@ -59,7 +58,8 @@ namespace BowlingGame
                     break;
                 case GameState.Scoring:
                     Debug.Log("[State] Scoring 시작");
-                    StartCoroutine(TempScoringDelay());
+                    // Scoring → 다음 상태 전이는 GameManager.OnEnterScoring 에서
+                    // ThrowTransitionController 결과를 받아 처리한다.
                     break;
                 case GameState.GameOver:
                     Debug.Log("[State] GameOver");
@@ -76,13 +76,6 @@ namespace BowlingGame
 
         private void OnReadyConfirm()
         {
-            ChangeState(GameState.AimingPosition);
-        }
-
-        private IEnumerator TempScoringDelay()
-        {
-            Debug.Log("[임시] Scoring 2초 후 다음 투구로 전환 (Phase 4에서 교체)");
-            yield return new WaitForSeconds(2f);
             ChangeState(GameState.AimingPosition);
         }
     }

@@ -89,10 +89,14 @@ namespace BowlingGame
 
             ball.ResetToStartPosition();
             pinManager.ResetAllPins();                   // 모든 핀 다시 세움
-            frameManager.AdvanceToNextFrame();           // 이 시점에 마지막 프레임이었다면 IsGameOver 가 true 가 됨
 
+            // OnGameOver 는 RecordThrow 내부에서 마지막 프레임 완료 시 이미 발행됨.
+            // 따라서 IsGameOver 검사를 AdvanceToNextFrame 호출보다 먼저 수행한다
+            // (마지막 프레임 후 AdvanceToNextFrame 은 호출 금지 — 명세 §시나리오 3).
             if (frameManager.IsGameOver())
                 return EmitGameOver();
+
+            frameManager.AdvanceToNextFrame();
 
             int nextFrameNo = frameManager.GetCurrentFrameIndex() + 1;
             if (wasStrike)

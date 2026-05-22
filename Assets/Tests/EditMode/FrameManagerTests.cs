@@ -23,8 +23,27 @@ namespace Bowling.EditMode.Tests
             return rule;
         }
 
-        private static FrameManager MakeManager(int frameCount) =>
-            new FrameManager(MakeRule(frameCount));
+        // MonoBehaviour 전환 후 임시 헬퍼.
+        // ※ 일부 기존 어서션(InvalidOperationException 기대 등)은 새 명세에서 경고+무시로 바뀌어
+        //   런타임에 실패할 수 있음 — 단계 5 에서 전체 테스트 리팩토링 예정.
+        private readonly List<GameObject> _spawnedHosts = new List<GameObject>();
+
+        [TearDown]
+        public void DestroySpawnedHosts()
+        {
+            for (int i = 0; i < _spawnedHosts.Count; i++)
+                if (_spawnedHosts[i] != null) UnityEngine.Object.DestroyImmediate(_spawnedHosts[i]);
+            _spawnedHosts.Clear();
+        }
+
+        private FrameManager MakeManager(int frameCount)
+        {
+            var host = new GameObject("TestFrameManagerHost");
+            _spawnedHosts.Add(host);
+            var fm = host.AddComponent<FrameManager>();
+            fm.Initialize(MakeRule(frameCount));
+            return fm;
+        }
 
         // 프레임 완료까지 투구하고 다음 프레임으로 진행 (편의 헬퍼)
         private static void PlayFrame(FrameManager fm, int ball1, int ball2)

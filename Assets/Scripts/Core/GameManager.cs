@@ -38,9 +38,10 @@ namespace BowlingGame
         [SerializeField] private ThrowTransitionController transitionController;
         [Tooltip("BallController 분리 전 임시 — BowlingBall 직접 참조.")]
         [SerializeField] private BowlingBall ball;
+        [Tooltip("씬에 배치된 FrameManager 호스트 GameObject. Initialize() 로 게임 시작 시 주입.")]
+        [SerializeField] private FrameManager frameManager;
 
         private GameStateManager stateManager;
-        private FrameManager frameManager;
 
         public FrameManager FrameManager => frameManager;
         public GameState CurrentState =>
@@ -67,8 +68,8 @@ namespace BowlingGame
                 return;
             }
 
-            // 1) 도메인 객체 생성 + 주입
-            frameManager = new FrameManager(ruleConfig);
+            // 1) 도메인 초기화 + TransitionController 에 주입
+            frameManager.Initialize(ruleConfig);
             transitionController.Initialize(frameManager);
 
             // 2) 이벤트 배선 (구독 → 트리거 순서)
@@ -114,9 +115,9 @@ namespace BowlingGame
             // 진행 중인 정지 감지가 있으면 중단 (Rolling 도중 호출된 경우)
             settleDetector.StopDetection();
 
-            // 도메인 상태 재생성 — 새 FrameManager 로 교체하고 TransitionController 에 재주입
-            frameManager = new FrameManager(ruleConfig);
-            transitionController.Initialize(frameManager);
+            // 도메인 상태 리셋 — 같은 FrameManager 인스턴스에 Initialize 재호출.
+            // TransitionController 는 인스턴스 참조를 그대로 유지하므로 재주입 불필요.
+            frameManager.Initialize(ruleConfig);
 
             // 물리/스냅샷/상태는 BeginGame 과 동일 시퀀스로 처리
             BeginGame();
@@ -209,6 +210,7 @@ namespace BowlingGame
             if (settleDetector        == null) { Debug.LogError("[GameManager] settleDetector 미할당");        ok = false; }
             if (transitionController  == null) { Debug.LogError("[GameManager] transitionController 미할당");  ok = false; }
             if (ball                  == null) { Debug.LogError("[GameManager] ball 미할당");                  ok = false; }
+            if (frameManager          == null) { Debug.LogError("[GameManager] frameManager 미할당");          ok = false; }
             return ok;
         }
     }

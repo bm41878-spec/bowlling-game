@@ -25,7 +25,10 @@
       "Bash(xargs -I {} sh -c 'head -c 200 \"{}\" 2>/dev/null | grep -l \"Ball\\\\|Pin\" 2>/dev/null && echo {}')",
       "mcp__UnityMCP__run_tests",
       "mcp__UnityMCP__get_test_job",
-      "mcp__UnityMCP__manage_scriptable_object"
+      "mcp__UnityMCP__manage_scriptable_object",
+      "mcp__UnityMCP__validate_script",
+      "PowerShell($wordPath = \"C:\\\\Users\\\\bmbm7\\\\Desktop\\\\bowlling-game\\\\볼링_점수계산_시스템_명세서.docx\"; try { $word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open\\($wordPath\\); $text = $doc.Content.Text; $doc.Close\\($false\\); $word.Quit\\(\\); $text } catch { Write-Output \"ERROR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($wordPath = \"C:\\\\Users\\\\bmbm7\\\\Desktop\\\\bowlling-game\\\\볼링게임프로젝트.docx\"; try { $word = New-Object -ComObject Word.Application; $word.Visible = $false; $doc = $word.Documents.Open\\($wordPath\\); $text = $doc.Content.Text; $doc.Close\\($false\\); $word.Quit\\(\\); $text } catch { Write-Output \"ERROR: $\\($_.Exception.Message\\)\" })"
     ]
   }
 }

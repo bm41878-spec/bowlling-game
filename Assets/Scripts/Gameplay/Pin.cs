@@ -5,7 +5,7 @@ namespace BowlingGame
 {
     /// <summary>
     /// 한 핀의 식별 / 쓰러짐 판정 / 초기 상태 복원을 담당하는 컴포넌트.
-    /// 핀 그룹 관리(레이아웃, 일괄 리셋, 재배치)는 <see cref="PinSetter"/> 의 책임이며,
+    /// 핀 그룹 관리(일괄 수집, 스냅샷, 일괄 리셋)는 <see cref="PinManager"/> 의 책임이며,
     /// 점수 계산은 Bowling.Scoring 도메인 책임이다.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]

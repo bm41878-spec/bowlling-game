@@ -95,6 +95,9 @@ namespace BowlingGame
             ResetBall(resetPos);
         }
 
+        // TODO: 거터 진입 시 점수 시스템 연계 예정 (Phase 미정).
+        //   - 활용 후보: 거터 강제 0점 처리 / 거터 진입 효과음 / UI 안내.
+        //   - 현재는 판정만 노출하고 호출처 없음.
         public bool IsInGutter => Mathf.Abs(transform.position.x) > 0.533f;
 
         void OnDestroy()

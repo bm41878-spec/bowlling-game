@@ -1,4 +1,4 @@
-// [TEST ONLY] R 키로 GameManager.RestartGame() 호출. Phase 5 이전 개발 테스트용.
+// [DEV TOOL] R 키로 GameManager.RestartGame() 호출. 빌드 제외 권장 (Conditional 처리 후속 과제).
 using UnityEngine;
 using UnityEngine.InputSystem;
 
