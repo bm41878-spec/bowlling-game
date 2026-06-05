@@ -367,7 +367,7 @@ public class SaveData
 
 ---
 
-## 14. 구현 현황 (2026-05-23 기준)
+## 14. 구현 현황 (2026-06-05 기준)
 
 본 섹션은 위 설계 명세 대비 실제 구현 진척도를 추적한다. 설계 §1~13 은 변경하지 않고 본 섹션만 갱신.
 
@@ -416,25 +416,49 @@ public class SaveData
 
 ### 14-5. 다음 작업
 
-**다음 우선순위는 ResultUI (결과 화면) 구현**으로 합의되었습니다. M2 (Vertical Slice, 6월 20일) 까지의 critical path.
+**다음 우선순위는 JSON SaveSystem (Phase 8)** 으로 합의되었습니다 (2026-06-05 사용자 결정).
 
-- 사용자 결정 표시 내용: 최종 점수 / 스트라이크 횟수 / 스페어 처리 횟수
-- 사용자 결정 버튼: 재시작 / 메인메뉴
-- 5단계 점진 개발 계획 확정 (ScoreboardUI 패턴 답습)
-- 단계 1 (골격) 추천안 제시 완료 → 사용자 확정 대기 중
+작업 윤곽:
+- `SaveSystem` (static): `Save(SaveData)` / `Load() → SaveData` + 파일 I/O + 예외 처리
+- `HighScoreService`: `GameRecord` 생성·정렬·상위 N개 유지·중복 정책
+- `GameManager.OnEnterGameOver` 에서 `HighScoreService.Record(...)` 호출 연동
+- 저장 경로: `Application.persistentDataPath/save.json`
+- 직렬화: JsonUtility (1순위) 또는 Newtonsoft.Json (확장 시 검토)
 
-자세한 재개 가이드는 **`NEXT_SESSION.md`** 참조.
+다음 세션 시작 시 결정 필요한 8개 항목:
+1. 직렬화 라이브러리 (JsonUtility / Newtonsoft)
+2. 저장 시점 (즉시 1회 / Pause·종료 시 flush)
+3. highScores 상한 (예: 모드별 상위 5개)
+4. 정렬 정책 (점수 내림차순 + 동점 시 playedAt 오래된 순)
+5. 첫 실행 처리 (빈 SaveData 생성 + 즉시 저장 / 인메모리만)
+6. 저장 실패 정책 (로그 + 재시도 / 사용자 알림)
+7. 백업·복구 (손상 JSON 폴백 + 백업 보존)
+8. 세이브 데이터 버전 관리 (`int version` 필드)
 
-### 14-6. 참고 문서
+> **ResultUI 작업은 보류 중**. `NEXT_SESSION.md` 의 계획은 SaveSystem 이후 또는 병행 검토.
+
+### 14-6. 최근 세션 변경 (2026-06-05)
+
+이번 세션에서 완료된 작업 — 자세한 진단·수정 기록은 **`SESSION_2026-06-05.md`** 참조.
+
+| 영역 | 변경 |
+|---|---|
+| 코드 최적화 | `BowlingBall.Awake()` 에서 `BallSpawnPoint` Transform 1회 캐싱 — 매 리셋마다의 `GameObject.Find` 풀-스캔 제거 |
+| 게임 상태 흐름 | `BowlingBall.HandleStateChanged` 의 AimingPosition 리셋 블록 제거 — 공 위치 리셋이 `GameManager.BeginGame` + `ThrowTransitionController.HandlePostThrow` 두 경로로 단일화 |
+| 물리 안정성 | `BowlingBall.ResetBall` 6단계 패턴 — `Physics.SyncTransforms()` + `rb.Sleep()` 추가로 Unity 6 의 `autoSyncTransforms=false` + Interpolation + ContinuousDynamic CCD 결합 부작용 (stale Rigidbody.position, 누적 internal state) 차단. 스트라이크/스페어 후 공 위치 미초기화 + y 드리프트 회귀 모두 해결 |
+| UI 해상도 일관성 | `Assets/Scenes/Game.unity` 의 점수판 Canvas CanvasScaler: `ConstantPixelSize 800×600` → `ScaleWithScreenSize 1920×1080 Match=0.5`. HUD_Canvas 와 통일. 랩탑 (2880×1800) ↔ 데스크탑 (QHD) 양쪽에서 점수판 위치·크기 일관성 확보 |
+
+### 14-7. 참고 문서
 
 | 문서 | 용도 |
 |---|---|
 | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
 | `AI_PROMPT_REFERENCE.md` | AI 협업용 — 컨벤션, 시그니처, 명명 규칙, "건드리지 말 것" 목록 |
-| `NEXT_SESSION.md` | 다음 세션 재개 가이드 (ResultUI 작업) |
+| `SESSION_2026-06-05.md` | 본 세션 (최적화·상태 흐름·해상도 UI) 진단·수정·검증 기록 |
+| `NEXT_SESSION.md` | ResultUI 작업 보류 가이드 (SaveSystem 이후 재개 검토) |
 | `One-Page Concept Sheet.txt` | 게임 컨셉 / 마일스톤 (M1~M5) |
 | `PROJECT_FEEDBACK.txt` | (외부 피드백 — 별도 관리) |
 
 ---
 
-*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-05-23*
+*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-06-05*

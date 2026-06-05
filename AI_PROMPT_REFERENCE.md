@@ -118,10 +118,19 @@ static int       CalculateTotalScore(List<Frame> frames);
 - 인스펙터 필드: `minForce = 8f`, `maxForce = 18f`
 - 공개 API:
   - `void Launch(Vector3 startPos, float normalizedForce)` — normalizedForce ∈ [0,1]
-  - `void ResetBall(Vector3 position)`
-  - `void ResetToStartPosition()` — `BallSpawnPoint` 이름의 GameObject 검색, 없으면 `(0, 0.15, 0.5)`
+  - `void ResetBall(Vector3 position)` — **6단계 안전 리셋** (아래 참조)
+  - `void ResetToStartPosition()` — Awake 캐싱된 `BallSpawnPoint` Transform 사용, 미발견 시 `FallbackSpawnPosition = (0, 0.15, 0.5)`
   - `bool IsRolling`, `bool IsInGutter` (※ IsInGutter 는 현재 호출처 없음)
-- **씬 의존**: `BallSpawnPoint` 라는 이름의 GameObject 가 씬에 있어야 정확한 위치로 리셋됨.
+- **씬 의존**: `BallSpawnPoint` 라는 이름의 GameObject 가 씬에 존재해야 정확한 위치로 리셋. Awake 1회 검색·Transform 캐싱 (게임당 수십 회의 `GameObject.Find` 풀-스캔 회피).
+- **`HandleStateChanged` 책임 범위**: `next == Rolling` 일 때 `ExecuteLaunch` 만 호출. **AimingPosition 진입 시 위치 리셋은 본 클래스가 하지 않음** — `GameManager.BeginGame` 과 `ThrowTransitionController.HandlePostThrow` 가 단일 리셋 경로.
+- **`ResetBall(Vector3)` 6단계 패턴 (순서 엄수 — 어기면 y 드리프트 회귀)**:
+  1. velocity / angularVelocity = 0 (동적 일 때만 — kinematic 상태에서 setter 호출 시 Unity warning).
+  2. `rb.isKinematic = true` (CCD / Interpolation / 중력 영향 차단).
+  3. `transform.position` / `rotation` 갱신 (kinematic 이라 안전).
+  4. **`Physics.SyncTransforms()`** — Unity 6 기본값 `autoSyncTransforms = false` 환경에서 Transform → Rigidbody.position 강제 동기화. 누락 시 stale 위치에서 시뮬레이션 시작.
+  5. **`rb.Sleep()`** — 누적 force / contact buffer / Interpolation 의 `previousPosition` 등 숨은 내부 상태 정리. 누락 시 매 리셋마다 잔여 상태 누적되어 y 드리프트.
+  6. `rb.isKinematic = false` 동적 복귀.
+- **씬의 Rigidbody 설정 (이름·값 변경 금지)**: `m_Interpolate: 1` (Interpolation 활성), `m_CollisionDetection: 2` (ContinuousDynamic). 위 6단계 패턴이 이 두 설정의 결합 부작용을 대처하기 위한 것이므로 함께 다뤄야 함.
 
 #### `BallAimer` (MonoBehaviour) — `BowlingBall` 과 같은 GameObject
 - 인스펙터 필드: `laneHalfWidth = 0.43f`, `oscSpeed = 1.2f`, `ballStartZ = 0.5f`
@@ -232,8 +241,9 @@ static int       CalculateTotalScore(List<Frame> frames);
 ```
 [GameStateManager.ChangeState(AimingPosition)]
   → BallAimer.HandleStateChanged → isAiming = true, ball kinematic
-  → BowlingBall.HandleStateChanged → ResetBall(BallSpawnPoint)
   → CameraFollow → Returning 모드 (이미 Idle이면 무시)
+  (※ 공 위치 리셋은 본 상태 전이가 아니라 GameManager.BeginGame /
+     ThrowTransitionController.HandlePostThrow 에서 명시적으로 호출됨 — 단일 리셋 경로)
 
 [스페이스바] InputController.OnConfirmPressed
   → BallAimer.OnConfirmInput → ConfirmedPosition 캐싱 → ChangeState(AimingPower)
@@ -334,6 +344,8 @@ pinManager.ResetAllPins()
 10. **`Assets/Settings/` 의 URP 렌더 파이프라인 자산** — 렌더링 깨질 위험.
 11. **UI 표시 규칙은 표시 컴포넌트(UI 클래스) 내부 상수에만 둔다** — 도메인(`FrameManager`, `Frame`, `ScoreCalculator`)에 "X", "/", "-" 같은 표시 문자열 절대 도입 금지. `ScoreboardUI.STRIKE_FIRST_DISPLAY` 등의 상수 패턴이 단일 출처.
 12. **이벤트 핸들러에 표시 로직 인라인 금지** — `ScoreboardUI.Handle*` 처럼 핸들러는 헬퍼 호출과 어느 UI 갱신할지만 결정. `<b>X</b>` 같은 문자열을 핸들러 본문에 직접 쓰지 말 것.
+13. **`BowlingBall.ResetBall` 의 6단계 순서** — `Physics.SyncTransforms()` / `rb.Sleep()` 누락 시 스트라이크/스페어 후 y 드리프트 회귀. Unity 6 의 `autoSyncTransforms=false` + Interpolation + ContinuousDynamic CCD 결합에서 발생하는 stale Rigidbody.position / 누적 internal state 문제를 대처. 자세한 진단은 `SESSION_2026-06-05.md` §2 참조.
+14. **공 위치 리셋 경로 단일화** — 현재 `GameManager.BeginGame` 과 `ThrowTransitionController.HandlePostThrow` 두 곳만 `ball.ResetToStartPosition()` 호출. `BowlingBall.HandleStateChanged` 의 AimingPosition 분기에 리셋 로직 다시 넣지 말 것 (이중 호출 → §4-1 시퀀스 깨짐).
 
 ---
 
@@ -383,7 +395,7 @@ pinManager.ResetAllPins()
 
 ---
 
-## 11. Game.unity 씬 구조 (2026-05-23 기준 실측)
+## 11. Game.unity 씬 구조 (2026-06-05 기준 실측)
 
 UI 작업 시 어느 노드를 가리켜야 하는지 빠르게 확인하기 위한 단면. 좌표·instanceID 는 변할 수 있으므로 **이름·계층 구조만 신뢰**할 것.
 
@@ -412,6 +424,17 @@ Canvas
 ├── frame_/                        (TMP_Text: "/" 시각적 구분자, 정적)
 └── frame_N_sec                    (TMP_Text: 2구 결과)          ← ScoreboardUI.frameSecText
 ```
+
+### CanvasScaler 설정 (2026-06-05 갱신)
+두 Canvas 모두 동일 설정으로 통일 — 해상도 독립성 보장.
+| 필드 | 값 |
+|---|---|
+| `m_UiScaleMode` | 1 (ScaleWithScreenSize) |
+| `m_ReferenceResolution` | 1920×1080 |
+| `m_ScreenMatchMode` | 0 (MatchWidthOrHeight) |
+| `m_MatchWidthOrHeight` | 0.5 (Width/Height 균형) |
+
+> 새 Canvas 추가 시 위 설정을 답습할 것. 특히 `ConstantPixelSize` (m_UiScaleMode=0) 는 해상도마다 상대 크기·위치가 변동하므로 금지.
 
 ### 폰트
 - 4개 TMP 모두 `NotoSansKR-Black SDF` (Bold 페이스 미내장, weight 900).
