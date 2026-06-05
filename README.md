@@ -367,7 +367,7 @@ public class SaveData
 
 ---
 
-## 14. 구현 현황 (2026-06-05 기준)
+## 14. 구현 현황 (2026-06-06 기준)
 
 본 섹션은 위 설계 명세 대비 실제 구현 진척도를 추적한다. 설계 §1~13 은 변경하지 않고 본 섹션만 갱신.
 
@@ -383,7 +383,7 @@ public class SaveData
 | 6 | UI/UX | 🟡 진행 중 |
 | &nbsp;&nbsp;6-a | 점수판 — 현재 프레임의 1구/2구/총점 (`ScoreboardUI`) | ✅ 완료 (씬 배선 + Play 검증 완료) |
 | &nbsp;&nbsp;6-b | 점수판 — 10프레임 모두 동적 생성 | ❌ 미착수 |
-| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/스페어 + 재시작·메뉴 버튼 | 🔵 **계획 확정·구현 대기** — `NEXT_SESSION.md` 참조 |
+| &nbsp;&nbsp;6-c | 결과 화면 — 게임 종료 시 최종 점수 표시 (`gameover_score`) + N초 대기 후 자동 재시작 | 🟡 **부분 완료** — 최종 점수 표시 + 3초 대기 후 자동 재시작 구현 완료. 스트라이크/스페어 통계·재시작/메뉴 버튼은 미구현 |
 | &nbsp;&nbsp;6-d | 메인 메뉴 → 게임 씬 전이 + 모드 선택 | ❌ 미착수 (`mainmenu.unity` 존재하지만 비어있음) |
 | &nbsp;&nbsp;6-e | 튜토리얼 화면 | ❌ 미착수 (형식 미결정) |
 | 7 | 폴리싱 (효과음/BGM/파티클/스킨) | ❌ 미착수 |
@@ -394,10 +394,10 @@ public class SaveData
 
 상세 시그니처·이벤트·계약은 **`AI_PROMPT_REFERENCE.md`** 참조 (단일 출처).
 
-- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `GameManager`(싱글톤, `[DefaultExecutionOrder(1000)]`)
-- **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager`, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDetector`, `ThrowTransitionController`
+- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `GameManager`(싱글톤, `[DefaultExecutionOrder(1000)]`) — GameOver 진입 시 `GAMEOVER_DISPLAY_DURATION`(3초) 대기 후 자동 `RestartGame()` 코루틴 포함
+- **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager`, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDetector`, `ThrowTransitionController` — `BowlingBall.ResetToStartPosition()` 에 위치 검증·재시도·최종 폴백 로직 포함
 - **Scoring** (`Bowling.Scoring`, Unity 비의존 어셈블리 `Bowling.Domain`): `Frame`, `FrameType`, `ScoreCalculator`(정적), `ScoringConstants`(정적), `FrameManager`(MonoBehaviour), `BowlingRuleConfig`(ScriptableObject, `BowlingGame` 네임스페이스 — 어셈블리 주의)
-- **UI**: `PowerGaugeUI`, **`ScoreboardUI`** (신규)
+- **UI**: `PowerGaugeUI`, `ScoreboardUI` — `gameover_score` TMP_Text 연동 포함 (게임 종료 시 최종 점수 표시)
 - **Debug**: `DebugResetController` (R 키 → `GameManager.RestartGame()`)
 - **Persistence**: `GameRecord`, `SaveData` (TODO)
 
@@ -406,7 +406,7 @@ public class SaveData
 - **`Assets/Scenes/Game.unity`** — 메인 게임 씬. 점수판 포함, Play 시 즉시 1프레임 시작.
   - GameObject 10개 (Main Camera, Directional Light, Ground, Lane_Root, BowlingBall, GameManager ⓐ/ⓑ, HUD_Canvas, EventSystem, Canvas)
   - **GameManager 두 개 분리**: ⓐ는 GameStateManager+InputController+DebugResetController, ⓑ는 GameManager+PhysicsSettleDetector+ThrowTransitionController+FrameManager
-  - Canvas 자식: `total_score`/`total_score_n`, `current_frame`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec` + `ScoreboardUI` 컴포넌트 부착
+  - Canvas 자식: `total_score`/`total_score_n`, `current_frame`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec`, **`gameover_score`** + `ScoreboardUI` 컴포넌트 부착
 - **`Assets/Scenes/mainmenu.unity`** — 빈 씬 (메뉴 흐름 미구현)
 
 ### 14-4. 룰 에셋
@@ -437,9 +437,9 @@ public class SaveData
 
 > **ResultUI 작업은 보류 중**. `NEXT_SESSION.md` 의 계획은 SaveSystem 이후 또는 병행 검토.
 
-### 14-6. 최근 세션 변경 (2026-06-05)
+### 14-6. 이전 세션 변경 (2026-06-05)
 
-이번 세션에서 완료된 작업 — 자세한 진단·수정 기록은 **`SESSION_2026-06-05.md`** 참조.
+자세한 진단·수정 기록은 **`SESSION_2026-06-05.md`** 참조.
 
 | 영역 | 변경 |
 |---|---|
@@ -448,17 +448,25 @@ public class SaveData
 | 물리 안정성 | `BowlingBall.ResetBall` 6단계 패턴 — `Physics.SyncTransforms()` + `rb.Sleep()` 추가로 Unity 6 의 `autoSyncTransforms=false` + Interpolation + ContinuousDynamic CCD 결합 부작용 (stale Rigidbody.position, 누적 internal state) 차단. 스트라이크/스페어 후 공 위치 미초기화 + y 드리프트 회귀 모두 해결 |
 | UI 해상도 일관성 | `Assets/Scenes/Game.unity` 의 점수판 Canvas CanvasScaler: `ConstantPixelSize 800×600` → `ScaleWithScreenSize 1920×1080 Match=0.5`. HUD_Canvas 와 통일. 랩탑 (2880×1800) ↔ 데스크탑 (QHD) 양쪽에서 점수판 위치·크기 일관성 확보 |
 
-### 14-7. 참고 문서
+### 14-7. 최근 세션 변경 (2026-06-06)
+
+| 영역 | 변경 파일 | 변경 내용 |
+|---|---|---|
+| 물리 안정성 — 공 리셋 위치 검증 | `BowlingBall.cs` | `ResetToStartPosition()` 에 리셋 후 위치 검증 로직 추가. 간헐적으로 공이 바닥을 관통하여 스폰되는 버그 방지. **3단계 방어**: ① 첫 시도 후 `ValidateResetPosition()` 검증 → ② 실패 시 최대 3회 즉시 재시도 (`MAX_RESET_RETRIES`) → ③ 모든 재시도 실패 시 `ForceResetCoroutine` 코루틴 기반 최종 폴백 (kinematic 강제 배치 → 1프레임 대기 → 재보정 → dynamic 복귀). 허용 오차: `RESET_POSITION_TOLERANCE = 0.05f`. 기존 `ResetBall` 6단계 패턴·public API 시그니처 변경 없음 |
+| UI — 게임 종료 최종 점수 표시 | `ScoreboardUI.cs` | `gameOverScoreText` (`gameover_score` TMP_Text) 필드 추가. `HandleGameOver()` 에서 기존 점수판 클리어 후 최종 점수를 `gameover_score` 에 표시. `HandleGameInitialized()` 에서 재시작 시 `gameover_score` 도 클리어. `Validate()` 에 null 검증 추가 |
+| 게임 흐름 — N초 대기 후 자동 재시작 | `GameManager.cs` | `GAMEOVER_DISPLAY_DURATION` 상수 (현재 **3초**, 추후 수정 용이) 추가. `OnEnterGameOver()` 에서 `GameOverDelayCoroutine` 시작 → N초 대기 → `RestartGame()` 자동 호출. `RestartGame()` 에 수동 재시작 시 진행 중인 대기 코루틴 중단 로직 추가 |
+
+### 14-8. 참고 문서
 
 | 문서 | 용도 |
 |---|---|
 | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
 | `AI_PROMPT_REFERENCE.md` | AI 협업용 — 컨벤션, 시그니처, 명명 규칙, "건드리지 말 것" 목록 |
-| `SESSION_2026-06-05.md` | 본 세션 (최적화·상태 흐름·해상도 UI) 진단·수정·검증 기록 |
+| `SESSION_2026-06-05.md` | 이전 세션 (최적화·상태 흐름·해상도 UI) 진단·수정·검증 기록 |
 | `NEXT_SESSION.md` | ResultUI 작업 보류 가이드 (SaveSystem 이후 재개 검토) |
 | `One-Page Concept Sheet.txt` | 게임 컨셉 / 마일스톤 (M1~M5) |
 | `PROJECT_FEEDBACK.txt` | (외부 피드백 — 별도 관리) |
 
 ---
 
-*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-06-05*
+*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-06-06*

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using Bowling.Scoring;
 
@@ -41,7 +42,11 @@ namespace BowlingGame
         [Tooltip("씬에 배치된 FrameManager 호스트 GameObject. Initialize() 로 게임 시작 시 주입.")]
         [SerializeField] private FrameManager frameManager;
 
+        /// <summary>게임 종료 후 최종 점수를 표시하는 시간 (초). 이 시간이 지나면 자동 재시작.</summary>
+        private const float GAMEOVER_DISPLAY_DURATION = 3f;
+
         private GameStateManager stateManager;
+        private Coroutine gameOverCoroutine;
 
         public FrameManager FrameManager => frameManager;
         public GameState CurrentState =>
@@ -115,6 +120,14 @@ namespace BowlingGame
             // 진행 중인 정지 감지가 있으면 중단 (Rolling 도중 호출된 경우)
             settleDetector.StopDetection();
 
+            // 게임 종료 대기 코루틴이 진행 중이면 중단 (GameOver 상태에서 수동 재시작된 경우)
+            if (gameOverCoroutine != null)
+            {
+                StopCoroutine(gameOverCoroutine);
+                gameOverCoroutine = null;
+                Debug.Log("[GameManager] 게임 종료 대기 코루틴 중단 (수동 재시작)");
+            }
+
             // 도메인 상태 리셋 — 같은 FrameManager 인스턴스에 Initialize 재호출.
             // TransitionController 는 인스턴스 참조를 그대로 유지하므로 재주입 불필요.
             frameManager.Initialize(ruleConfig);
@@ -172,6 +185,23 @@ namespace BowlingGame
             int score   = frameManager.GetTotalScore();
             int perfect = ruleConfig.GetPerfectScore();
             Debug.Log($"[GameOver] 게임 종료! 모드: {ruleConfig.ModeName}, 최종 점수: {score}점, 퍼펙트 대비: {score}/{perfect}");
+
+            // N초간 최종 점수 표시 후 자동 재시작
+            gameOverCoroutine = StartCoroutine(GameOverDelayCoroutine());
+        }
+
+        /// <summary>
+        /// 게임 종료 후 <see cref="GAMEOVER_DISPLAY_DURATION"/>초 대기한 뒤 자동으로 게임을 재시작한다.
+        /// ScoreboardUI 가 gameover_score 에 최종 점수를 표시하는 동안의 대기 시간.
+        /// </summary>
+        private IEnumerator GameOverDelayCoroutine()
+        {
+            Debug.Log($"[GameManager] 게임 종료 점수 표시 시작 — {GAMEOVER_DISPLAY_DURATION}초 후 재시작");
+            yield return new WaitForSeconds(GAMEOVER_DISPLAY_DURATION);
+
+            gameOverCoroutine = null;
+            Debug.Log("[GameManager] 게임 종료 대기 완료 — 재시작");
+            RestartGame();
         }
 
         // ---------- 외부 이벤트 핸들러 ----------
