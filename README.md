@@ -367,7 +367,7 @@ public class SaveData
 
 ---
 
-## 14. 구현 현황 (2026-05-23 기준)
+## 14. 구현 현황 (2026-06-06 기준)
 
 본 섹션은 위 설계 명세 대비 실제 구현 진척도를 추적한다. 설계 §1~13 은 변경하지 않고 본 섹션만 갱신.
 
@@ -379,12 +379,12 @@ public class SaveData
 | 2 | 씬·핀 배치·물리 튜닝 | ✅ 완료 |
 | 3 | 입력 시스템 + 상태 머신 | ✅ 완료 |
 | 4 | Frame / ScoreCalculator / FrameManager + EditMode 유닛 테스트 | ✅ 완료 (단, FrameManagerTests 일부 케이스가 새 fail-safe 명세와 불일치 — 리팩토링 대기) |
-| 5 | GameManager 상태 전이 + BowlingRuleConfig 주입 | ✅ 완료 (단, `FullModeRule.asset` 미생성 — 10프레임 모드 활성화 미완) |
+| 5 | GameManager 상태 전이 + BowlingRuleConfig 주입 | ✅ 완료 (`FullModeRule.asset` 생성 + GameModeSelector 폴백 로직 추가) |
 | 6 | UI/UX | 🟡 진행 중 |
 | &nbsp;&nbsp;6-a | 점수판 — 현재 프레임의 1구/2구/총점 (`ScoreboardUI`) | ✅ 완료 (씬 배선 + Play 검증 완료) |
 | &nbsp;&nbsp;6-b | 점수판 — 10프레임 모두 동적 생성 | ❌ 미착수 |
-| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/스페어 + 재시작·메뉴 버튼 | 🔵 **계획 확정·구현 대기** — `NEXT_SESSION.md` 참조 |
-| &nbsp;&nbsp;6-d | 메인 메뉴 → 게임 씬 전이 + 모드 선택 | ❌ 미착수 (`mainmenu.unity` 존재하지만 비어있음) |
+| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/스페어 + 재시작·메뉴 버튼 | 🟡 **단계 1 (골격) 완료, 단계 2~5 대기** — `NEXT_SESSION.md` 참조 |
+| &nbsp;&nbsp;6-d | 메인 메뉴 → 게임 씬 전이 + 모드 선택 | ✅ 완료 (`mainmenu.unity` 구성 + `MainMenuUI` + `GameModeSelector` + Build Settings 등록 + 양 모드 Play 검증) |
 | &nbsp;&nbsp;6-e | 튜토리얼 화면 | ❌ 미착수 (형식 미결정) |
 | 7 | 폴리싱 (효과음/BGM/파티클/스킨) | ❌ 미착수 |
 | 8 | JSON 저장 시스템 | ❌ 미착수 (`SaveData`/`GameRecord` 스켈레톤만 존재) |
@@ -394,10 +394,10 @@ public class SaveData
 
 상세 시그니처·이벤트·계약은 **`AI_PROMPT_REFERENCE.md`** 참조 (단일 출처).
 
-- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `GameManager`(싱글톤, `[DefaultExecutionOrder(1000)]`)
+- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `GameManager`(싱글톤, `[DefaultExecutionOrder(1000)]`), **`GameModeSelector`** (DontDestroyOnLoad 싱글톤 — 신규)
 - **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager`, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDetector`, `ThrowTransitionController`
 - **Scoring** (`Bowling.Scoring`, Unity 비의존 어셈블리 `Bowling.Domain`): `Frame`, `FrameType`, `ScoreCalculator`(정적), `ScoringConstants`(정적), `FrameManager`(MonoBehaviour), `BowlingRuleConfig`(ScriptableObject, `BowlingGame` 네임스페이스 — 어셈블리 주의)
-- **UI**: `PowerGaugeUI`, **`ScoreboardUI`** (신규)
+- **UI**: `PowerGaugeUI`, `ScoreboardUI`, **`MainMenuUI`** (신규), **`ResultUI`** (골격만, 신규)
 - **Debug**: `DebugResetController` (R 키 → `GameManager.RestartGame()`)
 - **Persistence**: `GameRecord`, `SaveData` (TODO)
 
@@ -407,25 +407,32 @@ public class SaveData
   - GameObject 10개 (Main Camera, Directional Light, Ground, Lane_Root, BowlingBall, GameManager ⓐ/ⓑ, HUD_Canvas, EventSystem, Canvas)
   - **GameManager 두 개 분리**: ⓐ는 GameStateManager+InputController+DebugResetController, ⓑ는 GameManager+PhysicsSettleDetector+ThrowTransitionController+FrameManager
   - Canvas 자식: `total_score`/`total_score_n`, `current_frame`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec` + `ScoreboardUI` 컴포넌트 부착
-- **`Assets/Scenes/mainmenu.unity`** — 빈 씬 (메뉴 흐름 미구현)
+- **`Assets/Scenes/mainmenu.unity`** — 메인메뉴 씬 (Build index 0, 시작 씬)
+  - 루트 GameObject 6개: Main Camera, Directional Light, Global Volume, **GameModeSelector**, EventSystem (InputSystemUIInputModule), **Canvas** (MainMenuUI 부착)
+  - Canvas 자식 3개: `Title` (TMP "Bowling Champion"), `ShortButton` (Button+Image+Label), `FullButton` (Button+Image+Label)
+  - MainMenuUI 인스펙터 배선: shortModeRule → ShortModeRule.asset, fullModeRule → FullModeRule.asset, gameSceneName = "Game"
 
 ### 14-4. 룰 에셋
 
-- `Assets/Configs/ShortModeRule.asset` — 쇼트 모드 5프레임 ✅
-- `Assets/Configs/FullModeRule.asset` — ❌ **미생성** (10프레임 모드 활성화 시 필요)
+- `Assets/Configs/ShortModeRule.asset` — 쇼트 모드 5프레임 ✅ (퍼펙트 75점)
+- `Assets/Configs/FullModeRule.asset` — 풀 모드 10프레임 ✅ (퍼펙트 150점)
 
-### 14-5. 다음 작업
+### 14-5. Build Settings
 
-**다음 우선순위는 ResultUI (결과 화면) 구현**으로 합의되었습니다. M2 (Vertical Slice, 6월 20일) 까지의 critical path.
+- index 0: `Assets/Scenes/mainmenu.unity` (시작 씬)
+- index 1: `Assets/Scenes/Game.unity`
 
-- 사용자 결정 표시 내용: 최종 점수 / 스트라이크 횟수 / 스페어 처리 횟수
-- 사용자 결정 버튼: 재시작 / 메인메뉴
-- 5단계 점진 개발 계획 확정 (ScoreboardUI 패턴 답습)
-- 단계 1 (골격) 추천안 제시 완료 → 사용자 확정 대기 중
+### 14-6. 다음 작업
+
+**ResultUI 단계 2~5** 재개가 다음 우선순위. M2 (Vertical Slice, 6월 20일) 까지의 critical path 중 마지막 핵심 항목.
+
+- 단계 1 (골격) 완료: `Assets/Scripts/UI/ResultUI.cs` — using, 직렬화 필드 7개, 메서드 스텁
+- 단계 2 (구독/해제) → 3 (상수/헬퍼) → 4 (핸들러/콜백) → 5 (씬 배선)
+- ResultUI 의 "메인메뉴" 버튼은 이미 작동 가능한 상태 (mainmenu.unity 구성 완료)
 
 자세한 재개 가이드는 **`NEXT_SESSION.md`** 참조.
 
-### 14-6. 참고 문서
+### 14-7. 참고 문서
 
 | 문서 | 용도 |
 |---|---|
@@ -437,4 +444,4 @@ public class SaveData
 
 ---
 
-*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-05-23*
+*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-06-06*

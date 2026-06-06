@@ -36,18 +36,20 @@
 ```
 Assets/
 ├── Scripts/
-│   ├── Core/           GameManager, GameStateManager, GameState(enum)
+│   ├── Core/           GameManager, GameStateManager, GameState(enum),
+│   │                   GameModeSelector (DontDestroyOnLoad 싱글톤)
 │   ├── Gameplay/       BowlingBall, BallAimer, Pin, PinManager,
 │   │                   InputController, CameraFollow,
 │   │                   PhysicsSettleDetector, ThrowTransitionController
 │   ├── Scoring/        Frame, FrameType, FrameManager, ScoreCalculator,
 │   │                   ScoringConstants, BowlingRuleConfig
-│   ├── UI/             PowerGaugeUI, ScoreboardUI
+│   ├── UI/             PowerGaugeUI, ScoreboardUI, MainMenuUI,
+│   │                   ResultUI (※ 골격만, 단계 2~5 미구현)
 │   ├── Persistence/    GameRecord, SaveData            (※ TODO: 직렬화 미구현)
 │   └── Debug/          DebugResetController            (R키 → RestartGame)
 ├── Tests/EditMode/     ScoreCalculatorTests, FrameManagerTests
-├── Scenes/             Game.unity, mainmenu.unity
-├── Configs/            ShortModeRule.asset             (※ FullModeRule.asset 미생성)
+├── Scenes/             Game.unity, mainmenu.unity (Build index 0)
+├── Configs/            ShortModeRule.asset (5프레임), FullModeRule.asset (10프레임)
 └── Settings/           URP 렌더 파이프라인 (건드리지 말 것)
 ```
 
@@ -111,6 +113,16 @@ static int       CalculateTotalScore(List<Frame> frames);
 - 공개 메서드: `void RestartGame()`
 - 공개 프로퍼티: `FrameManager FrameManager`, `GameState CurrentState`
 - 의존성 누락 시 `Debug.LogError` 후 초기화 중단 (Validate 가 false 반환).
+- **ModeSelector 폴백 (Start 첫 분기)**: `GameModeSelector.Instance?.SelectedRule` 이 null 이 아니면 인스펙터 `ruleConfig` 를 덮어쓴다. 없으면 인스펙터 값 사용 → `Game.unity` 단독 Play 호환성 유지.
+
+#### `GameModeSelector` (MonoBehaviour, **싱글톤**, DontDestroyOnLoad)
+- 메인메뉴에서 선택한 모드를 게임 씬으로 전달.
+- `static Instance`, `BowlingRuleConfig SelectedRule { get; private set; }`
+- `void SelectMode(BowlingRuleConfig rule)` — null 가드 후 캐시, 로그 출력 (`[ModeSelector]`).
+- 씬 전이 자체는 본 클래스가 아니라 호출자(`MainMenuUI`) 가 `SceneManager.LoadScene` 으로 수행.
+- 씬 배치: `mainmenu.unity` 에 단일 GameObject. Awake 에서 DontDestroyOnLoad. 중복 인스턴스는 Awake 에서 자기 자신 Destroy.
+- **메인메뉴 복귀 시 SelectedRule 유지** — 재선택 전까지 직전 모드 보존.
+- `Game.unity` 단독 Play 시 Instance 가 null — GameManager 의 인스펙터 폴백이 처리.
 
 ### 3-4. 물리/게임플레이
 
@@ -197,6 +209,22 @@ static int       CalculateTotalScore(List<Frame> frames);
   - `OnGameOver` 시 전체 클리어 (최종 점수는 별도 ResultUI 책임)
 - **Rich Text 전제**: TMP_Text `richText` 가 true 여야 `<b>X</b>` 가 동작. 기본값 true.
 - **폰트 주의**: 현재 씬 폰트는 `NotoSansKR-Black SDF` — 이미 weight 900 이라서 `<b>` 의 시각적 굵기 변화 거의 없음. 강조가 필요하면 색상/크기 태그로 변경 권장.
+
+#### `MainMenuUI` (MonoBehaviour) — `mainmenu.unity` 의 Canvas 에 부착
+- 직렬화 필드 (5개, 인스펙터 배선 필수):
+  - `shortModeRule`, `fullModeRule` (BowlingRuleConfig) — `ShortModeRule.asset`, `FullModeRule.asset` 직접 지정
+  - `shortButton`, `fullButton` (Button)
+  - `gameSceneName` (string, 기본값 `"Game"`) — Build Settings 등록 필수
+- 동작: 버튼 클릭 → `GameModeSelector.Instance.SelectMode(rule)` → `SceneManager.LoadScene(gameSceneName)`
+- 로그 prefix: `[MainMenu]`
+- Start/OnDestroy/Validate 패턴은 ScoreboardUI 와 동일.
+
+#### `ResultUI` (MonoBehaviour) — **골격만 구현** (단계 2~5 미완)
+- 위치: `Assets/Scripts/UI/ResultUI.cs`
+- 직렬화 필드 7개: `frameManager`, `panelRoot`, `finalScoreText`/`strikeCountText`/`spareCountText`, `restartButton`/`mainMenuButton`
+- 메서드 스텁만 존재 (Start, OnDestroy, HandleGameInitialized, HandleGameOver, OnRestartClicked, OnMainMenuClicked)
+- 진행 가이드: `NEXT_SESSION.md` §2~6
+- 로그 prefix: `[Result]` (단계 2 부터 추가 예정)
 
 ### 3-6. FrameManager — 진행 상태 관리자 (`Bowling.Scoring`)
 **도메인이지만 MonoBehaviour** — `Bowling.Domain` 어셈블리 내에서 Unity 의존.
@@ -299,7 +327,7 @@ pinManager.ResetAllPins()
 | `GameStateManager` | `BowlingGame` | 위와 혼동 금지 |
 | `FrameManager` | `Bowling.Scoring` | **도메인 네임스페이스에 있음**. `BowlingGame` 아님 |
 | `BowlingRuleConfig` | `BowlingGame` | **게임 네임스페이스에 있음**. `Bowling.Scoring` 아님 |
-| `Instance` | 4개 클래스 모두 사용 | `GameManager.Instance`, `GameStateManager.Instance`, `InputController.Instance` — 정확한 타입 명시 |
+| `Instance` | 5개 클래스 모두 사용 | `GameManager.Instance`, `GameStateManager.Instance`, `InputController.Instance`, `GameModeSelector.Instance` — 정확한 타입 명시. `GameModeSelector` 는 DontDestroyOnLoad 라 씬 전이 후에도 살아있음 |
 | `OnStateChanged` | `GameStateManager` 이벤트 | 다른 클래스에서 같은 이름 안 씀 (예약) |
 | `OnConfirmPressed` | `InputController` 이벤트 | 단일 입력 이벤트 — 다른 키 추가 시 같은 이름 재사용 금지 |
 | `ConfirmedPosition` / `ConfirmedNormalized` | BallAimer / PowerGaugeUI | 각각 위치(Vector3) / 세기(float 0~1) — 혼동 주의 |
@@ -316,6 +344,8 @@ pinManager.ResetAllPins()
 | `current_frame` vs `frame_n` | 위와 동일 패턴 | 부모는 라벨, 자식이 숫자. `ScoreboardUI.currentFrameText` 는 자식 |
 | `frame_N_first`, `frame_N_sec` | Canvas 직속 | 위와 달리 별도 라벨 없이 직접 텍스트만 표시 |
 | `Canvas` vs `HUD_Canvas` | Game.unity 의 두 Canvas | 점수판은 `Canvas`(layer=UI, 5개 자식) 측. `HUD_Canvas` 는 다른 HUD 용도(자식 1개) |
+| `Canvas` (Game.unity) vs `Canvas` (mainmenu.unity) | 다른 씬, 같은 이름 | Game.unity 의 Canvas 는 ScoreboardUI, mainmenu.unity 의 Canvas 는 MainMenuUI. 씬을 먼저 명시 |
+| `ruleConfig` (인스펙터) vs `SelectedRule` (ModeSelector) | GameManager 의 두 룰 소스 | Start() 첫 분기에서 SelectedRule 이 있으면 ruleConfig 덮어쓰기. 인스펙터는 폴백 (Game.unity 단독 Play 호환). 둘 다 유지 |
 | `GameManager` GameObject 2개 | 같은 이름 다른 컴포넌트 | (a) GameStateManager+InputController+DebugResetController 호스트, (b) GameManager+PhysicsSettleDetector+ThrowTransitionController+FrameManager 호스트 — **FrameManager 는 (b) 쪽** |
 
 ---
@@ -334,6 +364,8 @@ pinManager.ResetAllPins()
 10. **`Assets/Settings/` 의 URP 렌더 파이프라인 자산** — 렌더링 깨질 위험.
 11. **UI 표시 규칙은 표시 컴포넌트(UI 클래스) 내부 상수에만 둔다** — 도메인(`FrameManager`, `Frame`, `ScoreCalculator`)에 "X", "/", "-" 같은 표시 문자열 절대 도입 금지. `ScoreboardUI.STRIKE_FIRST_DISPLAY` 등의 상수 패턴이 단일 출처.
 12. **이벤트 핸들러에 표시 로직 인라인 금지** — `ScoreboardUI.Handle*` 처럼 핸들러는 헬퍼 호출과 어느 UI 갱신할지만 결정. `<b>X</b>` 같은 문자열을 핸들러 본문에 직접 쓰지 말 것.
+13. **`GameManager.Start()` 의 ModeSelector 폴백 분기 제거 금지** — `if (selector != null && selector.SelectedRule != null) ruleConfig = ...` 패턴은 `Game.unity` 단독 Play 호환과 mainmenu 경유 진입을 동시에 지원하는 단일 지점. 어느 한쪽으로만 강제하면 다른 경로가 깨진다.
+14. **`mainmenu.unity` 의 `GameModeSelector` GameObject** — DontDestroyOnLoad 의 진입점. 제거 시 모드 전달 끊김. 중복 배치도 금지 (Awake 에서 자기 자신 Destroy 처리됨).
 
 ---
 
@@ -353,9 +385,10 @@ pinManager.ResetAllPins()
 
 | 영역 | 상태 | 비고 |
 |---|---|---|
-| `FullModeRule.asset` (10프레임) | ❌ 미생성 | Editor 메뉴로 생성 후 인스펙터 값 입력 |
+| `FullModeRule.asset` (10프레임) | ✅ 생성 | `Assets/Configs/FullModeRule.asset`, 퍼펙트 150점 |
+| 메인메뉴 → 게임 씬 전이 + 모드 선택 | ✅ 완료 | `mainmenu.unity` 구성 + `MainMenuUI` + `GameModeSelector` + Build Settings 등록 + 양 모드 Play 검증 |
+| `ResultUI` (결과 화면) | 🟡 골격만 | 단계 1 (using, 직렬화 필드 7개, 메서드 스텁) 완료. 단계 2~5 (구독/헬퍼/핸들러/씬 배선) 미완 — `NEXT_SESSION.md` |
 | `Persistence/` 직렬화 로직 (`SaveSystem`) | ❌ 미구현 | 클래스 정의만 존재. `Application.persistentDataPath/save.json` |
-| 메인메뉴 → 게임 씬 전이 | ❌ 미구현 | `mainmenu.unity` 존재하지만 연결 없음 |
 | 접근성 옵션 (TTS, 색각, 자동 보정, 깜빡임 제거, 키 리바인딩) | ❌ 미구현 | M4 마일스톤 |
 | 거터 처리 (`BowlingBall.IsInGutter`) | 일부 | 판정만 존재, 호출처 없음 |
 | `FrameManagerTests` 의 `InvalidOperationException` 기대 테스트 | ⚠ 명세 불일치 | 실제 구현은 경고+무시. 테스트 리팩토링 필요 |
@@ -363,7 +396,8 @@ pinManager.ResetAllPins()
 | 사운드 (BGM/효과음) | ❌ 미구현 | Phase 7 |
 | 점수판 UI (현재 프레임의 1구/2구/총점) | ✅ 구현 완료 | `ScoreboardUI` — Game.unity 의 Canvas 에 배선됨. Play 시 3개 로그 시퀀스 검증 완료. |
 | 점수판 UI (10프레임 모두 동적 생성) | ❌ 미구현 | 현재는 "현재 프레임" 한 칸만 표시. 전체 프레임 표시는 별도 컴포넌트 또는 ScoreboardUI 확장 필요 |
-| `using System;` (ScoreboardUI) | 🟡 미사용 | 단계 4 끝까지 System 타입 직접 참조 없음. 필요 없으면 정리 후보 |
+| 튜토리얼 화면 | ❌ 미구현 | 형식(정적 이미지 / 인터랙티브) 미결정 |
+| `using System;` (ScoreboardUI / ResultUI) | 🟡 미사용 | 단계 4 끝까지 System 타입 직접 참조 없음. 필요 없으면 정리 후보 |
 
 ---
 
@@ -383,11 +417,11 @@ pinManager.ResetAllPins()
 
 ---
 
-## 11. Game.unity 씬 구조 (2026-05-23 기준 실측)
+## 11. 씬 구조 (2026-06-06 기준 실측)
 
 UI 작업 시 어느 노드를 가리켜야 하는지 빠르게 확인하기 위한 단면. 좌표·instanceID 는 변할 수 있으므로 **이름·계층 구조만 신뢰**할 것.
 
-### 루트 GameObject (10개)
+### 11-1. Game.unity 루트 GameObject (10개)
 - `Main Camera` — Camera + AudioListener + UniversalAdditionalCameraData + **CameraFollow**
 - `Directional Light`
 - `Ground` — MeshCollider
@@ -401,7 +435,7 @@ UI 작업 시 어느 노드를 가리켜야 하는지 빠르게 확인하기 위
 
 > **GameManager 두 개는 의도된 분리**. ScoreboardUI 인스펙터 배선 시 `frameManager` 필드는 ⓑ 쪽 FrameManager 컴포넌트를 가리킨다.
 
-### Canvas 자식 (점수판 영역)
+### 11-2. Game.unity Canvas 자식 (점수판 영역)
 ```
 Canvas
 ├── total_score                    (TMP_Text: "TOTAL SCORE" 라벨)
@@ -413,13 +447,31 @@ Canvas
 └── frame_N_sec                    (TMP_Text: 2구 결과)          ← ScoreboardUI.frameSecText
 ```
 
-### 폰트
-- 4개 TMP 모두 `NotoSansKR-Black SDF` (Bold 페이스 미내장, weight 900).
-- `<b>` 태그가 시각적으로 더 굵게 보이지 않으므로 강조 필요 시 `<color>` / `<size>` 사용 권장.
+### 11-3. mainmenu.unity 루트 GameObject (6개)
+- `Main Camera` — Camera + AudioListener + UniversalAdditionalCameraData
+- `Directional Light`
+- `Global Volume` — URP Volume (기본)
+- `GameModeSelector` — **GameModeSelector** (DontDestroyOnLoad 진입점, Game.unity 로 살아서 넘어감)
+- `EventSystem` — EventSystem + InputSystemUIInputModule
+- `Canvas` — Canvas (ScreenSpaceOverlay) + CanvasScaler (ScaleWithScreenSize, 1920×1080) + GraphicRaycaster + **MainMenuUI**
+
+### 11-4. mainmenu.unity Canvas 자식 (3개)
+```
+Canvas
+├── Title          (TMP_Text "Bowling Champion", 상단 중앙)
+├── ShortButton    (Image + Button + Label TMP "쇼트 모드 (5프레임)")   ← MainMenuUI.shortButton
+└── FullButton     (Image + Button + Label TMP "풀 모드 (10프레임)")    ← MainMenuUI.fullButton
+```
+
+### 11-5. 폰트
+- Game.unity 의 점수판 4개 TMP: `NotoSansKR-Black SDF` (weight 900). `<b>` 시각 효과 없음 — 강조 필요 시 `<color>` / `<size>` 사용 권장.
+- mainmenu.unity TMP: 기본 폰트 (자동 지정).
 
 ---
 
 ## 12. 검증된 동작 시퀀스 (Game.unity Play 진입 시)
+
+### 12-1. Game.unity 단독 Play (인스펙터 ruleConfig 폴백 경로)
 
 ScoreboardUI 가 GameManager(ⓑ) 의 `[DefaultExecutionOrder(1000)]` 보다 앞서 `Start()` 를 실행하므로, **이벤트 구독 → 발행 → 핸들 순서가 보장**된다. 정상 진입 시 콘솔에 다음 3개 로그가 순서대로 떠야 한다:
 
@@ -434,6 +486,32 @@ ScoreboardUI 가 GameManager(ⓑ) 의 `[DefaultExecutionOrder(1000)]` 보다 앞
 - frameManager 인스펙터 참조가 GameManager(ⓐ) 의 GameObject 로 잘못 연결 (FrameManager 컴포넌트가 없는 쪽)
 - 같은 씬에 ScoreboardUI 가 중복 배치
 
+### 12-2. mainmenu.unity 경유 진입 (양 모드 검증 완료)
+
+Play (mainmenu, build index 0) → 버튼 클릭 시 다음 로그 순서가 보장된다 (양 모드 공통, 모드명만 다름):
+
+```
+[MainMenu] 초기화 완료 — 버튼 콜백 등록
+[ModeSelector] 모드 선택: <모드명> (<프레임수>프레임)
+[MainMenu] 씬 전이 → Game (모드: <모드명>)
+[Scoreboard] 초기화 완료 — FrameManager 이벤트 구독 시작
+[GameManager] ModeSelector 로부터 룰 주입: <모드명>          ← 핵심: 폴백 경로가 ModeSelector 로 덮어쓰는 시점
+[FrameManager] 초기화 완료 (모드: <모드명>, 총 <프레임수>프레임)
+[Scoreboard] 게임 초기화 — UI 클리어
+[Scoreboard] 프레임 1 시작 — first/sec 클리어
+[GameManager] BeginGame — 모드: <모드명>, 총 <프레임수> 프레임
+[PinManager] 전체 핀 리셋 완료
+[PinManager] 투구 전 서있는 핀 10개: [1,2,3,4,5,6,7,8,9,10]
+[State Exit] Ready
+[GameManager] 상태 전이: Ready → AimingPosition
+[State] AimingPosition 시작
+```
+
+- `[GameManager] ModeSelector 로부터 룰 주입: ...` 로그가 빠지면 GameModeSelector 가 mainmenu 에 없거나 SelectMode 호출 전에 씬 전이가 일어난 것.
+- 모드명이 인스펙터에 설정한 `ruleConfig` (보통 ShortModeRule) 로 표시된다면 GameModeSelector 로 부터의 주입이 실패한 것 — 폴백 분기 점검.
+
 ---
 
 *이 문서는 코드 변경과 함께 갱신되어야 함. 시그니처·이벤트·필드명이 본 문서와 코드 사이에서 어긋나는 경우, **코드를 기준으로 본 문서를 수정**한다.*
+
+*최종 갱신: 2026-06-06 (mainmenu / GameModeSelector / MainMenuUI / ResultUI 골격 / FullModeRule.asset 추가)*

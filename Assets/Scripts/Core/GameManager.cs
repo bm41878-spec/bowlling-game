@@ -59,6 +59,15 @@ namespace BowlingGame
 
         void Start()
         {
+            // GameModeSelector 가 있으면 인스펙터 ruleConfig 를 선택값으로 덮어쓴다.
+            // (없는 경우 = Game.unity 단독 Play — 인스펙터 폴백 그대로 사용)
+            var selector = GameModeSelector.Instance;
+            if (selector != null && selector.SelectedRule != null)
+            {
+                ruleConfig = selector.SelectedRule;
+                Debug.Log($"[GameManager] ModeSelector 로부터 룰 주입: {ruleConfig.ModeName}");
+            }
+
             if (!ValidateDependencies()) return;
 
             stateManager = GameStateManager.Instance;

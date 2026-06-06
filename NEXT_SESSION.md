@@ -1,6 +1,6 @@
 # 다음 세션 재개 가이드
 
-> **작성일**: 2026-05-23
+> **작성일**: 2026-06-07 (2026-05-23 최초 작성 / 2026-06-06 메인메뉴·ResultUI 골격 반영)
 > **목적**: 세션 간 컨텍스트 손실 없이 ResultUI 작업을 이어가기 위한 단일 출처.
 > **선행 문서**: `README.md` §14 (구현 현황), `AI_PROMPT_REFERENCE.md` (컨벤션·구조)
 
@@ -10,37 +10,53 @@
 
 | 항목 | 값 |
 |---|---|
-| 직전 완료 작업 | `ScoreboardUI` 구현 5단계 + Play 모드 검증 |
-| 다음 작업 | **`ResultUI`** (결과 화면) 5단계 점진 구현 |
-| 현재 위치 | 단계 1 (골격) **추천안 제시 → 사용자 확정 대기** |
+| 직전 완료 작업 | **ResultUI 단계 1 (골격)** + **메인메뉴 6단계 (A~F)** + Build Settings + 양 모드 Play 검증 |
+| 다음 작업 | **`ResultUI` 단계 2~5** 이어가기 |
+| 현재 위치 | 단계 2 (구독/해제 + Validate) **착수 대기** |
 | 작업 방식 | 매 단계마다 (1) 클로드 추천안 제시 → (2) 사용자 명세 확정 → (3) 클로드 구현 → (4) 검증 → (5) 다음 단계 |
 | 진행 형식 | `ScoreboardUI` 때와 동일한 4단계 + 씬 배선 패턴 |
 
 ---
 
-## 1. 어디까지 왔나 (이번 세션 누적 산출물)
+## 1. 어디까지 왔나 (누적 산출물)
 
-### 1-1. 신규 파일
-- `Assets/Scripts/UI/ScoreboardUI.cs` — 점수판 UI (현재 프레임 1구/2구/총점). 5개 직렬화 필드, 5개 이벤트 핸들러, 4개 Format 헬퍼, 4개 표시 상수.
-- `AI_PROMPT_REFERENCE.md` — 다른 AI 협업용 구조 레퍼런스. 12개 섹션.
-- `README.md` §14 — 구현 현황 스냅샷 (본 갱신과 함께).
-- `NEXT_SESSION.md` — 본 문서.
+### 1-1. 이전 세션 산출물 (2026-05-23)
+- `Assets/Scripts/UI/ScoreboardUI.cs` — 점수판 UI. Play 검증 완료.
+- `AI_PROMPT_REFERENCE.md`, `README.md` §14, `NEXT_SESSION.md` 신규 작성.
+- `Assets/Scenes/Game.unity`: ScoreboardUI 배선 완료.
 
-### 1-2. 씬 변경
-- `Assets/Scenes/Game.unity`: Canvas (instanceID 49910) 에 `BowlingGame.ScoreboardUI` 컴포넌트 추가 + 5개 SerializeField 배선 완료.
+### 1-2. 직전 세션 산출물 (2026-06-06)
 
-### 1-3. 검증
-- Play 모드 진입 → 콘솔 3개 로그 정상 순서 발생, 에러·경고 0건:
-  ```
-  [Scoreboard] 초기화 완료 — FrameManager 이벤트 구독 시작
-  [Scoreboard] 게임 초기화 — UI 클리어
-  [Scoreboard] 프레임 1 시작 — first/sec 클리어
-  ```
+**ResultUI 단계 1 (골격) — 완료:**
+- `Assets/Scripts/UI/ResultUI.cs` 생성 — using 6개, XML 주석, Header 4그룹 직렬화 필드 7개, 메서드 스텁 6개. 컴파일·Play 검증 통과 (회귀 없음).
+
+**메인메뉴 작업 6단계 (A~F) — 완료:**
+- A. `Assets/Configs/FullModeRule.asset` 생성 — 풀 모드 10프레임, 퍼펙트 150점.
+- B. `Assets/Scripts/Core/GameModeSelector.cs` — DontDestroyOnLoad 싱글톤. `SelectedRule` 보유, `SelectMode(rule)` 캐시.
+- C. `GameManager.Start()` 첫 분기에 ModeSelector 폴백 로직 추가 — 인스펙터 `ruleConfig` 호환 유지.
+- D. `Assets/Scripts/UI/MainMenuUI.cs` — 5개 직렬화 필드, 버튼 콜백 → SelectMode → LoadScene("Game").
+- E. `Assets/Scenes/mainmenu.unity` 구성 — GameModeSelector + EventSystem + Canvas (Title + ShortButton + FullButton) + MainMenuUI 배선.
+- F. Build Settings 등록 (mainmenu=index 0, Game=index 1) + 쇼트/풀 양 모드 Play 검증 통과.
+
+### 1-3. 검증된 시퀀스
+
+**Game.unity 단독 Play** — ScoreboardUI 3개 로그 시퀀스 그대로:
+```
+[Scoreboard] 초기화 완료 → 게임 초기화 → 프레임 1 시작
+```
+
+**mainmenu.unity 경유 (양 모드 공통, 모드명만 다름)**:
+```
+[MainMenu] 초기화 완료 → [ModeSelector] 모드 선택 → [MainMenu] 씬 전이 → Game
+→ [Scoreboard] 초기화 완료 → [GameManager] ModeSelector 로부터 룰 주입
+→ [FrameManager] 초기화 완료 → [Scoreboard] 게임 초기화/프레임 1 시작
+→ [GameManager] BeginGame → AimingPosition
+```
 
 ### 1-4. 확인된 잔여 이슈
 - **`FrameManagerTests`** 일부 케이스(`InvalidOperationException` 기대)가 실제 fail-safe 구현과 불일치 — 테스트 리팩토링 필요. ResultUI 작업과는 독립.
 - **폰트**: `NotoSansKR-Black SDF` 는 이미 weight 900 이라 `<b>` 가 시각적 효과 거의 없음. 강조 필요 시 색상/크기 태그 권장.
-- **`using System;`** (ScoreboardUI.cs) 미사용 — 정리 후보.
+- **`using System;`** (ScoreboardUI.cs / ResultUI.cs) 미사용 — 정리 후보 (ResultUI 단계 4 종료 시점에 판단).
 
 ---
 
@@ -76,151 +92,127 @@
 
 ### 2-4. 5단계 점진 개발 계획
 
-| 단계 | 산출물 | 검증 |
-|---|---|---|
-| **1. 골격** | 클래스, using, 직렬화 필드 7개, 메서드 스텁 | 컴파일 통과 |
-| **2. 구독/해제** | Start/OnDestroy/Validate. 이벤트 2개 구독 + 버튼 2개 `onClick.AddListener` (해제도 대칭) | Play 시 `[Result] 초기화 완료` 로그 |
-| **3. 상수/헬퍼** | 표시 상수 + `CountStrikes`/`CountSpares`/`FormatCount`/`ShowPanel`/`HidePanel` | 컴파일 통과 |
-| **4. 핸들러+콜백** | `HandleGameInitialized`(숨김), `HandleGameOver`(표시+갱신), `OnRestartClicked`, `OnMainMenuClicked` | Play 시작 시 패널 숨김 확인 |
-| **5. 씬 배선** | Canvas 하위 `ResultPanel` (TMP 3 + Button 2 + 배경 Image), ResultUI 부착, 7개 필드 할당, Build Settings 에 `mainmenu` 추가 | Play → 5프레임 완주 → 패널 표시 + 점수/스트라이크/스페어 확인 + 버튼 동작 |
+| 단계 | 산출물 | 검증 | 상태 |
+|---|---|---|---|
+| **1. 골격** | 클래스, using, 직렬화 필드 7개, 메서드 스텁 | 컴파일 통과 | ✅ 완료 (2026-06-06) |
+| **2. 구독/해제** | Start/OnDestroy/Validate. 이벤트 2개 구독 + 버튼 2개 `onClick.AddListener` (해제도 대칭) | Play 시 `[Result] 초기화 완료` 로그 | ⏳ **착수 대기** |
+| **3. 상수/헬퍼** | 표시 상수 + `CountStrikes`/`CountSpares`/`FormatCount`/`ShowPanel`/`HidePanel` | 컴파일 통과 | ⏳ |
+| **4. 핸들러+콜백** | `HandleGameInitialized`(숨김), `HandleGameOver`(표시+갱신), `OnRestartClicked`, `OnMainMenuClicked` | Play 시작 시 패널 숨김 확인 | ⏳ |
+| **5. 씬 배선** | Canvas 하위 `ResultPanel` (TMP 3 + Button 2 + 배경 Image), ResultUI 부착, 7개 필드 할당 | Play → 5프레임 완주 → 패널 표시 + 점수/스트라이크/스페어 확인 + 버튼 동작 | ⏳ |
 
 각 단계는 한 메시지 안에서 완결.
 
----
-
-## 3. 현재 위치: 단계 1 (골격) 추천안 (사용자 확정 대기)
-
-세션 종료 시점에 클로드가 아래 추천안을 제시. 다음 세션에서 사용자가 확정하면 그대로 구현.
-
-### 3-1. Using 선언
-```csharp
-using System;                       // (단계 4까지 미사용 가능 — 종료 시 정리)
-using UnityEngine;
-using UnityEngine.UI;               // Button
-using UnityEngine.SceneManagement;  // SceneManager.LoadScene
-using TMPro;                        // TMP_Text
-using Bowling.Scoring;              // FrameManager, Frame
-```
-
-### 3-2. 클래스 헤더 XML 주석 (한국어)
-```csharp
-/// <summary>
-/// 게임 종료 결과 화면 UI. FrameManager OnGameOver 발생 시 패널을 표시하고
-/// 최종 점수 / 스트라이크 횟수 / 스페어 처리 횟수를 갱신한다.
-/// </summary>
-/// <remarks>
-/// 동작:
-///   OnGameInitialized → 패널 숨김 (게임 시작/재시작 시점)
-///   OnGameOver        → 패널 표시 + 3개 수치 갱신
-///   재시작 버튼       → GameManager.Instance.RestartGame()
-///   메인메뉴 버튼     → SceneManager.LoadScene("mainmenu")
-/// 표시 규칙은 본 클래스에 캡슐화. FrameManager 는 표시 규칙을 모름.
-/// </remarks>
-```
-
-### 3-3. 직렬화 필드 (Header 4그룹)
-```csharp
-[Header("References")]
-[SerializeField, Tooltip("GameManager 가 들고 있는 동일 FrameManager 인스턴스. ScoreboardUI 와 같은 인스턴스여야 함.")]
-private FrameManager frameManager;
-
-[Header("Panel")]
-[SerializeField, Tooltip("결과 패널 컨테이너. 본 컴포넌트가 붙은 오브젝트와는 별도 — 본 컴포넌트는 항상 활성 유지, panelRoot 만 SetActive 토글.")]
-private GameObject panelRoot;
-
-[Header("Text Targets")]
-[SerializeField, Tooltip("Canvas > ResultPanel > final_score")]      private TMP_Text finalScoreText;
-[SerializeField, Tooltip("Canvas > ResultPanel > strike_count")]     private TMP_Text strikeCountText;
-[SerializeField, Tooltip("Canvas > ResultPanel > spare_count")]      private TMP_Text spareCountText;
-
-[Header("Buttons")]
-[SerializeField, Tooltip("재시작 — GameManager.Instance.RestartGame()")]                  private Button restartButton;
-[SerializeField, Tooltip("메인메뉴 — SceneManager.LoadScene(\"mainmenu\")")]              private Button mainMenuButton;
-```
-
-### 3-4. 메서드 스텁
-```csharp
-private void Start()      { /* 단계 2 */ }
-private void OnDestroy()  { /* 단계 2 */ }
-
-private void HandleGameInitialized() { /* 단계 4 */ }
-private void HandleGameOver()        { /* 단계 4 */ }
-
-private void OnRestartClicked()      { /* 단계 4 */ }
-private void OnMainMenuClicked()     { /* 단계 4 */ }
-```
+> Build Settings 의 `mainmenu` 등록은 메인메뉴 작업에서 이미 완료됨 — 단계 5 사전 점검에서 제거 가능.
 
 ---
 
-## 4. 의사결정 필요 항목 (단계 1 시작 전 확정)
+## 3. 현재 위치: 단계 2 (구독/해제 + Validate) 착수 대기
 
-### A. `panelRoot` 분리 (클로드 추천: ✅ 분리)
-ResultUI 컴포넌트는 Canvas 같은 **항상 활성 오브젝트**에 부착하고, `panelRoot` (= `ResultPanel`) 만 `SetActive` 로 토글.
-- 이유: 본 컴포넌트가 비활성화되면 `OnDestroy` 시점·이벤트 구독 해제가 깨질 수 있음.
-- 권장 씬 구조:
-  ```
-  Canvas (ResultUI 부착)
-  └── ResultPanel (= panelRoot)
-      ├── final_score
-      ├── strike_count
-      ├── spare_count
-      ├── restart_button
-      └── main_menu_button
-  ```
+단계 1 (골격) 완료. 다음은 ScoreboardUI 의 단계 2 패턴 답습.
 
-### B. GameManager 참조 방식 (클로드 추천: 싱글톤 직접 접근)
-- **싱글톤** (추천): `GameManager.Instance.RestartGame()` 직접 호출. 직렬화 필드 불필요. null 가드만.
-- **인스펙터 주입**: 명시적 의존성 가시화. 필드 추가 시 8개로 늘어남.
-- 근거: `frameManager` 는 이벤트 구독 핵심 의존이라 명시 주입이 맞지만, `GameManager` 는 콜백 한 곳에서만 호출 — 싱글톤이 적절.
+### 3-1. 단계 2 추천 골자 (사용자 확정 후 클로드가 그대로 작성)
 
-### C. `using System;` 운명 (클로드 추천: 단계 1 에서는 둠, 단계 4 종료 후 미사용이면 제거)
+**Start():**
+```csharp
+private void Start()
+{
+    if (!Validate()) { enabled = false; return; }
 
-### D. 명명 컨벤션 — Header 그룹, TMP `~Text`, Button `~Button` 접미사, 핸들러 `Handle~` / 버튼 `On~Clicked` (이미 합의)
+    frameManager.OnGameInitialized += HandleGameInitialized;
+    frameManager.OnGameOver        += HandleGameOver;
 
-### E. 씬 노드 이름 (클로드 제안)
-- snake_case 일관성 유지: `final_score`, `strike_count`, `spare_count`, `restart_button`, `main_menu_button`, `ResultPanel`
+    restartButton.onClick.AddListener(OnRestartClicked);
+    mainMenuButton.onClick.AddListener(OnMainMenuClicked);
+
+    // 초기 상태: 패널 숨김 (HidePanel 은 단계 3 에서 추가 — 단계 2 에선 panelRoot.SetActive(false) 직접 호출)
+    panelRoot.SetActive(false);
+
+    Debug.Log("[Result] 초기화 완료 — FrameManager 이벤트 + 버튼 콜백 구독");
+}
+```
+
+**OnDestroy():**
+```csharp
+private void OnDestroy()
+{
+    if (frameManager != null)
+    {
+        frameManager.OnGameInitialized -= HandleGameInitialized;
+        frameManager.OnGameOver        -= HandleGameOver;
+    }
+    if (restartButton  != null) restartButton.onClick.RemoveListener(OnRestartClicked);
+    if (mainMenuButton != null) mainMenuButton.onClick.RemoveListener(OnMainMenuClicked);
+}
+```
+
+**Validate():** ScoreboardUI 와 동일 패턴 — 7개 필드 각각 null 체크 + `[Result]` prefix 에러 로그.
+
+### 3-2. 단계 2 의사결정 후보
+- **A. `panelRoot.SetActive(false)` 를 Start 에서 직접 호출할지, 단계 3 의 `HidePanel()` 헬퍼로 미룰지** — 클로드 추천: 단계 2 에선 직접 호출, 단계 3 에서 헬퍼로 리팩토링.
+- **B. `[Result] 초기화 완료` 로그 메시지 문구** — ScoreboardUI 패턴 답습.
+
+### 3-3. 단계 2 검증
+- Play (mainmenu) → 쇼트 또는 풀 버튼 클릭 → Game 씬 진입 → 콘솔에 `[Result] 초기화 완료 — ...` 로그 확인.
+- ResultUI 가 부착될 GameObject 는 단계 5 에서 결정 — 단계 2~4 동안은 Game.unity 의 Canvas 에 임시 부착하거나 단순히 컴파일만 검증.
 
 ---
 
-## 5. 사전 점검 (단계 5 직전 확인 필요)
+## 4. 단계 1 시 합의된 결정사항 (단계 2 이후에도 유지)
 
-- **Build Settings 에 `Assets/Scenes/mainmenu.unity` 등록 여부** — 미등록 시 `SceneManager.LoadScene("mainmenu")` 가 런타임 에러. 미등록이면 `mcp__UnityMCP__manage_build` 도구로 추가.
-- **`mainmenu.unity` 내부 상태** — 현재 빈 씬으로 추정. 본 단계는 LoadScene 호출만 보장하면 됨. 메뉴 UI 구현은 후속 단계.
+| 항목 | 결정 |
+|---|---|
+| A. `panelRoot` 분리 | ✅ 분리. 본 컴포넌트는 Canvas 같은 항상 활성 오브젝트에 부착 |
+| B. GameManager 참조 방식 | ✅ 싱글톤 (`GameManager.Instance.RestartGame()`). 직렬화 필드 추가 안 함 |
+| C. `using System;` | 단계 1 에서는 둠. 단계 4 종료 후 미사용이면 제거 |
+| D. 명명 컨벤션 | Header 그룹, TMP `~Text`, Button `~Button` 접미사, 핸들러 `Handle~` / 버튼 `On~Clicked` |
+| E. 씬 노드 이름 | snake_case: `final_score`, `strike_count`, `spare_count`, `restart_button`, `main_menu_button`, `ResultPanel` |
+
+권장 씬 구조 (단계 5 작업):
+```
+Canvas (ResultUI 부착)
+└── ResultPanel (= panelRoot)
+    ├── final_score
+    ├── strike_count
+    ├── spare_count
+    ├── restart_button
+    └── main_menu_button
+```
+
+---
+
+## 5. 사전 점검 (단계 5 직전 확인)
+
+- ~~Build Settings 에 `mainmenu` 등록~~ — ✅ **이미 완료** (메인메뉴 작업 F 단계에서 mainmenu=index 0, Game=index 1 등록).
+- `mainmenu.unity` 내부 상태 — ✅ MainMenuUI / GameModeSelector / 2개 버튼 모두 구성 완료. ResultUI 의 "메인메뉴" 버튼이 `SceneManager.LoadScene("mainmenu")` 호출 시 실제 동작 검증 가능.
 
 ---
 
 ## 6. 다음 세션 재개 절차
 
-### 6-1. 빠른 재개 (의사결정 사전 확정)
-사용자가 다음 세션 시작 시 아래 형식으로 결정사항을 명시하면 클로드가 바로 단계 1 구현 진입:
+### 6-1. 빠른 재개 (단계 2 바로 진입)
 ```
-ResultUI 재개. 결정사항:
-A. panelRoot 분리 ✅
-B. GameManager 싱글톤 ✅
-C. using System; 단계 1 에서는 둠 ✅
-D. 명명 컨벤션 그대로 ✅
-E. 씬 노드 이름 (snake_case 안) 그대로 ✅
-단계 1 진행해줘
+ResultUI 단계 2 진행해줘.
+의사결정 A,B 클로드 추천안 그대로 ✅
 ```
 
 ### 6-2. 일반 재개
 사용자가 "ResultUI 작업 재개" 라고만 말하면 클로드가:
 1. 본 문서를 다시 읽어 컨텍스트 복원
-2. 단계 1 추천안을 다시 제시 (§3 내용)
+2. 단계 2 추천안을 다시 제시 (§3 내용)
 3. 사용자 확정 대기
 
 ### 6-3. 진행 방식 변경 시
-사용자가 "이번엔 클로드가 자동 진행" 또는 "한 번에 단계 1~4 다 작성" 등을 요청하면 그에 맞춰 페이스 조정.
+사용자가 "단계 2~5 한 번에 다 작성" 또는 "자동 진행" 등을 요청하면 그에 맞춰 페이스 조정.
 
 ---
 
-## 7. 본 단계 완료 이후 후보 (별도 합의 필요)
+## 7. ResultUI 완료 이후 후보 (별도 합의 필요)
 
 플랜에 명시된 후속 작업 (우선순위 미정):
 
 1. **결과 화면 확장**: "퍼펙트!" 강조, 별/이펙트, 베스트 스코어 비교
-2. **메인 메뉴 흐름**: `mainmenu.unity` ↔ `Game.unity` 씬 전이 + 모드 선택 UI
-3. **`FullModeRule.asset` 생성**: 10프레임 모드 활성화
+2. ~~메인 메뉴 흐름: `mainmenu.unity` ↔ `Game.unity` 씬 전이 + 모드 선택 UI~~ — ✅ **완료 (2026-06-06)**
+3. ~~`FullModeRule.asset` 생성: 10프레임 모드 활성화~~ — ✅ **완료 (2026-06-06)**
 4. **10프레임 동적 점수판**: README §6/§10 의 "프레임 수에 따라 동적 생성" 항목
 5. **튜토리얼 화면**: 형식 미결정 (정적 이미지 / 인터랙티브)
 6. **JSON SaveSystem** (Phase 8)
@@ -232,11 +224,14 @@ E. 씬 노드 이름 (snake_case 안) 그대로 ✅
 ## 8. 절대 잊지 말 것 (재개 시 첫 5분 체크리스트)
 
 - [ ] `AI_PROMPT_REFERENCE.md` §6 (혼동 위험 이름) 재확인 — 특히 `FrameManager` 가 `Bowling.Scoring` 네임스페이스에 있다는 사실
-- [ ] `AI_PROMPT_REFERENCE.md` §7 (절대 건드리지 말 것) 12개 항목 재확인 — 특히 "UI 표시 규칙은 UI 클래스 내부 상수에만 둘 것"
+- [ ] `AI_PROMPT_REFERENCE.md` §7 (절대 건드리지 말 것) 14개 항목 재확인 — 특히 "UI 표시 규칙은 UI 클래스 내부 상수에만 둘 것", "GameManager.Start() ModeSelector 폴백 분기 제거 금지"
 - [ ] `ScoreboardUI.cs` 의 4단계 패턴 → ResultUI 도 동일 답습
 - [ ] `GameManager` GameObject 두 개 중 **ⓑ (FrameManager 보유)** 쪽에 `frameManager` 인스펙터 연결
 - [ ] 폰트 `NotoSansKR-Black SDF` 의 `<b>` 무효 이슈 — ResultUI 의 시각 강조 필요 시 색상/크기 태그 사용
+- [ ] 메인메뉴 경유로 게임에 진입할 때 `[GameManager] ModeSelector 로부터 룰 주입: ...` 로그가 떠야 정상 (AI_PROMPT_REFERENCE.md §12-2)
 
 ---
 
 *이 문서는 ResultUI 작업이 완료되거나, 다음 작업이 결정되면 갱신/대체된다.*
+
+*최종 갱신: 2026-06-07 (단계 1 완료 + 메인메뉴 작업 완료 반영, 단계 2 진입 가이드로 전환)*
