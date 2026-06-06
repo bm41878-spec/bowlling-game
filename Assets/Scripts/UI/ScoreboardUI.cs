@@ -36,6 +36,9 @@ namespace BowlingGame
         [SerializeField, Tooltip("Canvas > frame_N_sec")]
         private TMP_Text frameSecText;
 
+        [SerializeField, Tooltip("Canvas > gameover_score — 게임 종료 시 최종 점수 표시")]
+        private TMP_Text gameOverScoreText;
+
         // 표시 규칙 단일 출처(single source of truth)
         private const string STRIKE_FIRST_DISPLAY = "<b>X</b>";    // 스트라이크 1구
         private const string STRIKE_SEC_DISPLAY   = "-";           // 스트라이크 2구 (굴리지 않음)
@@ -83,6 +86,8 @@ namespace BowlingGame
             { Debug.LogError("[Scoreboard] frameFirstText 참조 누락"); return false; }
             if (frameSecText == null)
             { Debug.LogError("[Scoreboard] frameSecText 참조 누락"); return false; }
+            if (gameOverScoreText == null)
+            { Debug.LogError("[Scoreboard] gameOverScoreText 참조 누락"); return false; }
             return true;
         }
 
@@ -132,7 +137,8 @@ namespace BowlingGame
         private void HandleGameInitialized()
         {
             ClearAllText();
-            Debug.Log("[Scoreboard] 게임 초기화 — UI 클리어");
+            gameOverScoreText.text = EMPTY_DISPLAY;
+            Debug.Log("[Scoreboard] 게임 초기화 — UI 클리어 (gameover_score 포함)");
         }
 
         private void HandleFrameStarted(int frameIndex)
@@ -179,8 +185,12 @@ namespace BowlingGame
 
         private void HandleGameOver()
         {
+            int finalScore = frameManager.GetTotalScore();
+
             ClearAllText();
-            Debug.Log("[Scoreboard] 게임 종료 — UI 클리어");
+            gameOverScoreText.text = FormatTotalScore(finalScore);
+
+            Debug.Log($"[Scoreboard] 게임 종료 — 점수판 클리어, gameover_score 에 최종 점수 {finalScore} 표시");
         }
     }
 }

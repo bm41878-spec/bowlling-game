@@ -7,16 +7,32 @@ namespace BowlingGame
         [SerializeField] float minForce = 8f;
         [SerializeField] float maxForce = 18f;
 
+        // BallSpawnPoint 의 시작 위치 미발견 시 사용하는 fallback. Awake 에서 한 번 캐싱하여
+        // 매 리셋마다 GameObject.Find 호출을 피한다.
+        private static readonly Vector3 FallbackSpawnPosition = new Vector3(0f, 0.15f, 0.5f);
+
+        /// <summary>리셋 후 위치 검증 허용 오차 (단위: 유닛). 이 값 이상 벗어나면 재시도.</summary>
+        private const float RESET_POSITION_TOLERANCE = 0.05f;
+        /// <summary>위치 검증 실패 시 최대 재시도 횟수.</summary>
+        private const int MAX_RESET_RETRIES = 3;
+
         private Rigidbody rb;
         private BallAimer ballAimer;
         private PowerGaugeUI powerGauge;
         private GameStateManager stateManager;
         private InputController inputController;
+        private Transform spawnPoint;
         private bool hasLaunched = false;
+        /// <summary>최종 폴백(코루틴) 진행 중 여부. 중복 실행 방지.</summary>
+        private bool isForceResetting = false;
 
         void Awake()
         {
             rb = GetComponent<Rigidbody>();
+            var spawnGo = GameObject.Find("BallSpawnPoint");
+            spawnPoint = spawnGo != null ? spawnGo.transform : null;
+            if (spawnPoint == null)
+                Debug.LogWarning($"[Ball] BallSpawnPoint 미발견 — fallback 위치 {FallbackSpawnPosition} 사용");
         }
 
         void Start()
@@ -32,17 +48,10 @@ namespace BowlingGame
 
         private void HandleStateChanged(GameState prev, GameState next)
         {
+            // AimingPosition 진입 시 위치 리셋은 GameManager.BeginGame / ThrowTransitionController
+            // 가 명시적으로 호출한다 (이중 호출 방지 — 단일 리셋 경로 유지).
             if (next == GameState.Rolling)
                 ExecuteLaunch();
-
-            if (next == GameState.AimingPosition)
-            {
-                var spawnPoint = GameObject.Find("BallSpawnPoint");
-                Vector3 resetPos = spawnPoint != null
-                    ? spawnPoint.transform.position
-                    : new Vector3(0f, 0.15f, 0.5f);
-                ResetBall(resetPos);
-            }
         }
 
         private void ExecuteLaunch()
@@ -71,28 +80,124 @@ namespace BowlingGame
 
         public void ResetBall(Vector3 position)
         {
-            // 동적 바디일 때 velocity 0 → 이후 kinematic 으로 이동/회전 → 다시 동적 복귀.
-            // (kinematic 상태에서 velocity 설정 시 Unity 경고 발생하므로 순서 중요)
+            // 1) 운동 상태 클리어 — 동적 일 때만. kinematic 상태에서 velocity setter 호출 시 Unity 경고.
             if (!rb.isKinematic)
             {
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
             }
+
+            // 2) 물리 시뮬레이션 차단 — CCD / Interpolation / 중력 영향 0.
             rb.isKinematic = true;
+
+            // 3) Transform 위치·회전 갱신 (kinematic 상태에서 안전).
             transform.position = position;
             transform.rotation = Quaternion.identity;
+
+            // 4) Transform → 물리 엔진 명시적 sync.
+            //    Unity 6 기본값 autoSyncTransforms=false 환경에서 이 호출이 없으면
+            //    Rigidbody.position 이 stale 한 채 dynamic 으로 복귀하여 잘못된 위치에서 시뮬레이션.
+            Physics.SyncTransforms();
+
+            // 5) 누적 force / contact buffer / Interpolation 의 previousPosition 등 내부 상태 정리.
+            //    이전 버전의 y 드리프트 회귀 원인 — Sleep() 누락으로 잔여 상태가 매 리셋마다 누적됨.
+            rb.Sleep();
+
+            // 6) 동적 복귀 — 깨끗한 상태로 시뮬레이션 재개.
             rb.isKinematic = false;
             hasLaunched = false;
         }
 
-        // BallController 분리 전 임시 래퍼 — ThrowTransitionController 등 조정자 코드의 호출 지점을 안정화한다.
+        /// <summary>
+        /// 리셋 후 실제 위치가 목표 위치와 허용 오차 이내인지 검증한다.
+        /// </summary>
+        /// <param name="targetPosition">의도한 스폰 위치.</param>
+        /// <returns>허용 오차 이내이면 true, 아니면 false.</returns>
+        private bool ValidateResetPosition(Vector3 targetPosition)
+        {
+            float distance = Vector3.Distance(transform.position, targetPosition);
+            return distance <= RESET_POSITION_TOLERANCE;
+        }
+
+        /// <summary>
+        /// 모든 재시도 실패 시 실행하는 최종 폴백.
+        /// kinematic 상태로 강제 배치한 뒤 1프레임 대기 후 dynamic 복귀하여
+        /// 물리 엔진이 안정된 상태에서 시뮬레이션을 재개한다.
+        /// </summary>
+        private System.Collections.IEnumerator ForceResetCoroutine(Vector3 targetPosition)
+        {
+            isForceResetting = true;
+
+            // kinematic 으로 완전 고정
+            rb.isKinematic = true;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            transform.position = targetPosition;
+            transform.rotation = Quaternion.identity;
+            Physics.SyncTransforms();
+            rb.Sleep();
+
+            Debug.LogWarning($"[Ball] 최종 폴백 — kinematic 강제 배치 후 1프레임 대기 (위치: {targetPosition})");
+
+            // 1프레임 대기 — 물리 엔진이 Transform 변경을 완전히 반영할 시간 확보.
+            yield return null;
+
+            // 대기 후에도 위치가 어긋나면 한 번 더 강제 보정
+            transform.position = targetPosition;
+            Physics.SyncTransforms();
+            rb.Sleep();
+
+            // dynamic 복귀
+            rb.isKinematic = false;
+            hasLaunched = false;
+            isForceResetting = false;
+
+            if (ValidateResetPosition(targetPosition))
+                Debug.Log($"[Ball] 최종 폴백 성공 — 위치 검증 통과 (오차: {Vector3.Distance(transform.position, targetPosition):F4})");
+            else
+                Debug.LogError($"[Ball] 최종 폴백 후에도 위치 불일치! 실제: {transform.position}, 목표: {targetPosition}");
+        }
+
+        /// <summary>
+        /// 스폰 위치로 공을 리셋한다. 리셋 후 위치를 검증하고,
+        /// 바닥 관통 등으로 위치가 어긋났을 경우 최대 <see cref="MAX_RESET_RETRIES"/>회 재시도한다.
+        /// 모든 재시도 실패 시 코루틴 기반 최종 폴백을 실행한다.
+        /// </summary>
         public void ResetToStartPosition()
         {
-            var spawnPoint = GameObject.Find("BallSpawnPoint");
-            Vector3 resetPos = spawnPoint != null
-                ? spawnPoint.transform.position
-                : new Vector3(0f, 0.15f, 0.5f);
+            // 최종 폴백 코루틴이 진행 중이면 중복 호출 방지
+            if (isForceResetting)
+            {
+                Debug.LogWarning("[Ball] 최종 폴백 코루틴 진행 중 — ResetToStartPosition 호출 무시");
+                return;
+            }
+
+            Vector3 resetPos = spawnPoint != null ? spawnPoint.position : FallbackSpawnPosition;
+
+            // 첫 시도
             ResetBall(resetPos);
+
+            if (ValidateResetPosition(resetPos))
+                return; // 정상 — 추가 작업 불필요
+
+            // 재시도 루프
+            for (int attempt = 1; attempt <= MAX_RESET_RETRIES; attempt++)
+            {
+                Debug.LogWarning($"[Ball] 리셋 위치 검증 실패 (시도 {attempt}/{MAX_RESET_RETRIES}) — " +
+                                 $"실제: {transform.position}, 목표: {resetPos}, " +
+                                 $"오차: {Vector3.Distance(transform.position, resetPos):F4}");
+                ResetBall(resetPos);
+
+                if (ValidateResetPosition(resetPos))
+                {
+                    Debug.Log($"[Ball] 재시도 {attempt}회 만에 리셋 성공");
+                    return;
+                }
+            }
+
+            // 모든 즉시 재시도 실패 → 코루틴 기반 최종 폴백 (1프레임 대기)
+            Debug.LogWarning($"[Ball] {MAX_RESET_RETRIES}회 재시도 모두 실패 — 최종 폴백 코루틴 시작");
+            StartCoroutine(ForceResetCoroutine(resetPos));
         }
 
         // TODO: 거터 진입 시 점수 시스템 연계 예정 (Phase 미정).

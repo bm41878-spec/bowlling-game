@@ -383,7 +383,7 @@ public class SaveData
 | 6 | UI/UX | 🟡 진행 중 |
 | &nbsp;&nbsp;6-a | 점수판 — 현재 프레임의 1구/2구/총점 (`ScoreboardUI`) | ✅ 완료 (씬 배선 + Play 검증 완료) |
 | &nbsp;&nbsp;6-b | 점수판 — 10프레임 모두 동적 생성 | ❌ 미착수 |
-| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/스페어 + 재시작·메뉴 버튼 | 🟡 **단계 1 (골격) 완료, 단계 2~5 대기** — `NEXT_SESSION.md` 참조 |
+| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/스페어 + 재시작·메뉴 버튼 | 🟡 **진행 중** — ScoreboardUI 의 `gameover_score` 표시 완료 (노트북 통합) + `ResultUI` 단계 1 (골격) 완료. 자동 재시작 코루틴은 제거됨 (ResultUI 패널 클릭으로 교체 예정). 단계 2~5 대기 — `NEXT_SESSION.md` 참조 |
 | &nbsp;&nbsp;6-d | 메인 메뉴 → 게임 씬 전이 + 모드 선택 | ✅ 완료 (`mainmenu.unity` 구성 + `MainMenuUI` + `GameModeSelector` + Build Settings 등록 + 양 모드 Play 검증) |
 | &nbsp;&nbsp;6-e | 튜토리얼 화면 | ❌ 미착수 (형식 미결정) |
 | 7 | 폴리싱 (효과음/BGM/파티클/스킨) | ❌ 미착수 |
@@ -394,10 +394,10 @@ public class SaveData
 
 상세 시그니처·이벤트·계약은 **`AI_PROMPT_REFERENCE.md`** 참조 (단일 출처).
 
-- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `GameManager`(싱글톤, `[DefaultExecutionOrder(1000)]`), **`GameModeSelector`** (DontDestroyOnLoad 싱글톤 — 신규)
-- **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager`, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDetector`, `ThrowTransitionController`
+- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `GameManager`(싱글톤, `[DefaultExecutionOrder(1000)]`) — ModeSelector 폴백 분기 포함, **`GameModeSelector`** (DontDestroyOnLoad 싱글톤 — 신규)
+- **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager`, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDetector`, `ThrowTransitionController` — `BowlingBall.ResetToStartPosition()` 에 위치 검증·재시도·최종 폴백 로직 포함
 - **Scoring** (`Bowling.Scoring`, Unity 비의존 어셈블리 `Bowling.Domain`): `Frame`, `FrameType`, `ScoreCalculator`(정적), `ScoringConstants`(정적), `FrameManager`(MonoBehaviour), `BowlingRuleConfig`(ScriptableObject, `BowlingGame` 네임스페이스 — 어셈블리 주의)
-- **UI**: `PowerGaugeUI`, `ScoreboardUI`, **`MainMenuUI`** (신규), **`ResultUI`** (골격만, 신규)
+- **UI**: `PowerGaugeUI`, `ScoreboardUI` (`gameover_score` TMP_Text 연동 포함), **`MainMenuUI`** (신규), **`ResultUI`** (골격만, 신규)
 - **Debug**: `DebugResetController` (R 키 → `GameManager.RestartGame()`)
 - **Persistence**: `GameRecord`, `SaveData` (TODO)
 
@@ -406,7 +406,7 @@ public class SaveData
 - **`Assets/Scenes/Game.unity`** — 메인 게임 씬. 점수판 포함, Play 시 즉시 1프레임 시작.
   - GameObject 10개 (Main Camera, Directional Light, Ground, Lane_Root, BowlingBall, GameManager ⓐ/ⓑ, HUD_Canvas, EventSystem, Canvas)
   - **GameManager 두 개 분리**: ⓐ는 GameStateManager+InputController+DebugResetController, ⓑ는 GameManager+PhysicsSettleDetector+ThrowTransitionController+FrameManager
-  - Canvas 자식: `total_score`/`total_score_n`, `current_frame`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec` + `ScoreboardUI` 컴포넌트 부착
+  - Canvas 자식: `total_score`/`total_score_n`, `current_frame`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec`, **`gameover_score`** + `ScoreboardUI` 컴포넌트 부착
 - **`Assets/Scenes/mainmenu.unity`** — 메인메뉴 씬 (Build index 0, 시작 씬)
   - 루트 GameObject 6개: Main Camera, Directional Light, Global Volume, **GameModeSelector**, EventSystem (InputSystemUIInputModule), **Canvas** (MainMenuUI 부착)
   - Canvas 자식 3개: `Title` (TMP "Bowling Champion"), `ShortButton` (Button+Image+Label), `FullButton` (Button+Image+Label)
@@ -424,21 +424,51 @@ public class SaveData
 
 ### 14-6. 다음 작업
 
-**ResultUI 단계 2~5** 재개가 다음 우선순위. M2 (Vertical Slice, 6월 20일) 까지의 critical path 중 마지막 핵심 항목.
+**ResultUI 단계 2~5** 재개가 다음 우선순위. M2 (Vertical Slice, 6월 20일) 까지의 critical path.
 
 - 단계 1 (골격) 완료: `Assets/Scripts/UI/ResultUI.cs` — using, 직렬화 필드 7개, 메서드 스텁
 - 단계 2 (구독/해제) → 3 (상수/헬퍼) → 4 (핸들러/콜백) → 5 (씬 배선)
 - ResultUI 의 "메인메뉴" 버튼은 이미 작동 가능한 상태 (mainmenu.unity 구성 완료)
+- `ScoreboardUI.gameOverScoreText` 와 ResultUI 패널의 역할 분담은 단계 5 (씬 배선) 시점에 결정 — 현재 큰 점수만 표시되는 `gameover_score` 위에 ResultUI 패널을 오버레이할지, ResultPanel 안으로 흡수할지
 
-자세한 재개 가이드는 **`NEXT_SESSION.md`** 참조.
+**ResultUI 완료 이후 후속 우선순위**:
+- JSON SaveSystem (Phase 8) — 2026-06-05 검토된 작업 윤곽:
+  - `SaveSystem` (static): `Save(SaveData)` / `Load() → SaveData` + 파일 I/O + 예외 처리
+  - `HighScoreService`: `GameRecord` 생성·정렬·상위 N개 유지·중복 정책
+  - `GameManager.OnEnterGameOver` 에서 `HighScoreService.Record(...)` 호출 연동
+  - 저장 경로: `Application.persistentDataPath/save.json`
+  - 직렬화: JsonUtility (1순위) 또는 Newtonsoft.Json (확장 시 검토)
+  - 결정 필요한 8개 항목: 직렬화 라이브러리 / 저장 시점 / highScores 상한 / 정렬 정책 / 첫 실행 처리 / 저장 실패 정책 / 백업·복구 / 세이브 데이터 버전 관리
 
-### 14-7. 참고 문서
+### 14-7. 이전 세션 변경 (2026-06-05)
+
+자세한 진단·수정 기록은 **`SESSION_2026-06-05.md`** 참조.
+
+| 영역 | 변경 |
+|---|---|
+| 코드 최적화 | `BowlingBall.Awake()` 에서 `BallSpawnPoint` Transform 1회 캐싱 — 매 리셋마다의 `GameObject.Find` 풀-스캔 제거 |
+| 게임 상태 흐름 | `BowlingBall.HandleStateChanged` 의 AimingPosition 리셋 블록 제거 — 공 위치 리셋이 `GameManager.BeginGame` + `ThrowTransitionController.HandlePostThrow` 두 경로로 단일화 |
+| 물리 안정성 | `BowlingBall.ResetBall` 6단계 패턴 — `Physics.SyncTransforms()` + `rb.Sleep()` 추가로 Unity 6 의 `autoSyncTransforms=false` + Interpolation + ContinuousDynamic CCD 결합 부작용 (stale Rigidbody.position, 누적 internal state) 차단. 스트라이크/스페어 후 공 위치 미초기화 + y 드리프트 회귀 모두 해결 |
+| UI 해상도 일관성 | `Assets/Scenes/Game.unity` 의 점수판 Canvas CanvasScaler: `ConstantPixelSize 800×600` → `ScaleWithScreenSize 1920×1080 Match=0.5`. HUD_Canvas 와 통일. 랩탑 (2880×1800) ↔ 데스크탑 (QHD) 양쪽에서 점수판 위치·크기 일관성 확보 |
+
+### 14-8. 최근 세션 변경 (2026-06-06)
+
+| 영역 | 변경 파일 | 변경 내용 |
+|---|---|---|
+| 물리 안정성 — 공 리셋 위치 검증 | `BowlingBall.cs` | `ResetToStartPosition()` 에 리셋 후 위치 검증 로직 추가. 간헐적으로 공이 바닥을 관통하여 스폰되는 버그 방지. **3단계 방어**: ① 첫 시도 후 `ValidateResetPosition()` 검증 → ② 실패 시 최대 3회 즉시 재시도 (`MAX_RESET_RETRIES`) → ③ 모든 재시도 실패 시 `ForceResetCoroutine` 코루틴 기반 최종 폴백 (kinematic 강제 배치 → 1프레임 대기 → 재보정 → dynamic 복귀). 허용 오차: `RESET_POSITION_TOLERANCE = 0.05f`. 기존 `ResetBall` 6단계 패턴·public API 시그니처 변경 없음 |
+| UI — 게임 종료 최종 점수 표시 | `ScoreboardUI.cs` | `gameOverScoreText` (`gameover_score` TMP_Text) 필드 추가. `HandleGameOver()` 에서 기존 점수판 클리어 후 최종 점수를 `gameover_score` 에 표시. `HandleGameInitialized()` 에서 재시작 시 `gameover_score` 도 클리어. `Validate()` 에 null 검증 추가 |
+| 메인메뉴 흐름 — 신규 | `Assets/Scripts/Core/GameModeSelector.cs`, `Assets/Scripts/UI/MainMenuUI.cs`, `Assets/Scenes/mainmenu.unity`, `Assets/Configs/FullModeRule.asset` | 메인메뉴 → 게임 씬 전이 + 모드 선택 6단계(A~F) 완료. `GameModeSelector` (DontDestroyOnLoad 싱글톤) 가 선택 모드를 보존, `MainMenuUI` 가 쇼트/풀 버튼 처리, `GameManager.Start()` 가 `SelectedRule` 폴백 분기 사용 (인스펙터 `ruleConfig` 호환 유지). Build Settings 등록 (mainmenu=0, Game=1) + 양 모드 Play 검증 완료 |
+| ResultUI 골격 (신규) | `Assets/Scripts/UI/ResultUI.cs` | 결과 화면 UI 5단계 점진 개발 중 **단계 1 (골격) 완료** — using, XML 주석, Header 4그룹 직렬화 필드 7개, 메서드 스텁 6개. 단계 2~5 (구독/해제·상수/헬퍼·핸들러/콜백·씬 배선) 대기 — `NEXT_SESSION.md` |
+| 자동 재시작 코루틴 제거 (revert) | `GameManager.cs` | 노트북 브랜치의 `GAMEOVER_DISPLAY_DURATION` / `gameOverCoroutine` / `GameOverDelayCoroutine` / RestartGame 의 코루틴 중단 로직 / `using System.Collections;` 모두 **제거**. 사용자 결정 (2026-06-07): 자동 재시작이 ResultUI 패널의 명시 클릭(재시작/메인메뉴) 으로 대체됨. `gameover_score` 표시 자체는 ScoreboardUI 측에 유지 |
+
+### 14-9. 참고 문서
 
 | 문서 | 용도 |
 |---|---|
 | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
 | `AI_PROMPT_REFERENCE.md` | AI 협업용 — 컨벤션, 시그니처, 명명 규칙, "건드리지 말 것" 목록 |
-| `NEXT_SESSION.md` | 다음 세션 재개 가이드 (ResultUI 작업) |
+| `SESSION_2026-06-05.md` | 이전 세션 (최적화·상태 흐름·해상도 UI) 진단·수정·검증 기록 |
+| `NEXT_SESSION.md` | ResultUI 단계 2~5 재개 가이드 |
 | `One-Page Concept Sheet.txt` | 게임 컨셉 / 마일스톤 (M1~M5) |
 | `PROJECT_FEEDBACK.txt` | (외부 피드백 — 별도 관리) |
 
