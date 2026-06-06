@@ -367,7 +367,7 @@ public class SaveData
 
 ---
 
-## 14. 구현 현황 (2026-06-06 기준)
+## 14. 구현 현황 (2026-06-07 기준)
 
 본 섹션은 위 설계 명세 대비 실제 구현 진척도를 추적한다. 설계 §1~13 은 변경하지 않고 본 섹션만 갱신.
 
@@ -474,4 +474,4 @@ public class SaveData
 
 ---
 
-*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-06-06*
+*Custom Bowling Score System — Design Specification v1.0 / Implementation Snapshot 2026-06-07*

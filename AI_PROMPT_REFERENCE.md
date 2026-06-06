@@ -537,4 +537,4 @@ Play (mainmenu, build index 0) → 버튼 클릭 시 다음 로그 순서가 보
 
 *이 문서는 코드 변경과 함께 갱신되어야 함. 시그니처·이벤트·필드명이 본 문서와 코드 사이에서 어긋나는 경우, **코드를 기준으로 본 문서를 수정**한다.*
 
-*최종 갱신: 2026-06-06 (mainmenu / GameModeSelector / MainMenuUI / ResultUI 골격 / FullModeRule.asset 추가)*
+*최종 갱신: 2026-06-07 (mainmenu / GameModeSelector / MainMenuUI / ResultUI 골격 / FullModeRule.asset 추가, 노트북 브랜치 통합, 자동 재시작 코루틴 제거)*
