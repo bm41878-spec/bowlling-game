@@ -6,17 +6,27 @@ namespace BowlingGame
     {
         [SerializeField] float laneHalfWidth = 0.43f;
         [SerializeField] float oscSpeed = 1.2f;
-        [SerializeField] float ballStartZ = 0.5f;
+        [SerializeField, Tooltip("BallSpawnPoint 미발견 시 사용할 fallback Z.")] float ballStartZ = 0.5f;
 
         private GameStateManager stateManager;
         private InputController inputController;
         private Rigidbody rb;
+        // BowlingBall.cs 와 동일하게 Awake 에서 1회 캐싱 — 매 Update 의 Find 풀스캔 방지.
+        private Transform spawnPoint;
         private float pingPongTime = 0f;
         private bool isAiming = false;
         private int enteredFrame = -1;
         private Vector3 confirmedPosition;
 
         public Vector3 ConfirmedPosition => confirmedPosition;
+
+        void Awake()
+        {
+            var spawnGo = GameObject.Find("BallSpawnPoint");
+            spawnPoint = spawnGo != null ? spawnGo.transform : null;
+            if (spawnPoint == null)
+                Debug.LogWarning($"[BallAimer] BallSpawnPoint 미발견 — Y 는 transform 차용, Z 는 ballStartZ({ballStartZ}) fallback");
+        }
 
         void Start()
         {
@@ -33,7 +43,10 @@ namespace BowlingGame
 
             pingPongTime += Time.deltaTime;
             float x = Mathf.PingPong(pingPongTime * oscSpeed, laneHalfWidth * 2f) - laneHalfWidth;
-            transform.position = new Vector3(x, transform.position.y, ballStartZ);
+            // Y/Z 는 spawnPoint 의 canonical 값 차용 — transform 차용 시의 interpolation/catch-up 잔여 영향 차단.
+            float y = spawnPoint != null ? spawnPoint.position.y : transform.position.y;
+            float z = spawnPoint != null ? spawnPoint.position.z : ballStartZ;
+            transform.position = new Vector3(x, y, z);
         }
 
         private void HandleStateChanged(GameState prev, GameState next)

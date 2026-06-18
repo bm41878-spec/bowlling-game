@@ -32,7 +32,16 @@
       "Bash(git --no-pager diff ProjectSettings/EditorBuildSettings.asset)",
       "Bash(git diff *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "mcp__UnityMCP__manage_build",
+      "Bash(git commit *)",
+      "Bash(git merge *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(ls -l /tmp/game.*.unity)",
+      "Bash(C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/Tools/UnityYAMLMerge.exe merge *)",
+      "Read(//tmp/**)",
+      "Bash(git push *)"
     ]
   }
 }

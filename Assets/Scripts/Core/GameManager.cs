@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Bowling.Scoring;
 
 namespace BowlingGame
@@ -175,13 +176,18 @@ namespace BowlingGame
             transitionController.HandlePostThrow();
         }
 
+        private const string GAMEOVER_SCENE_NAME = "Gameover_scene";
+
         private void OnEnterGameOver()
         {
             settleDetector.StopDetection();
             int score   = frameManager.GetTotalScore();
             int perfect = ruleConfig.GetPerfectScore();
             Debug.Log($"[GameOver] 게임 종료! 모드: {ruleConfig.ModeName}, 최종 점수: {score}점, 퍼펙트 대비: {score}/{perfect}");
-            // ResultUI 가 OnGameOver 이벤트 구독으로 패널 표시 + 재시작/메뉴 버튼 제공 (단계 2~5).
+
+            // 결과를 다음 씬으로 전달 + Gameover_scene 로드.
+            GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName);
+            SceneManager.LoadScene(GAMEOVER_SCENE_NAME);
         }
 
         // ---------- 외부 이벤트 핸들러 ----------
