@@ -37,6 +37,12 @@ namespace BowlingGame
         /// <summary>마지막 게임의 모드명 (예: "쇼트 모드"). 결과 없으면 빈 문자열.</summary>
         public string LastModeName { get; private set; } = string.Empty;
 
+        /// <summary>해당 모드의 최고 점수 (이번 게임 반영 후). 결과 없으면 0.</summary>
+        public int LastBestScore { get; private set; }
+
+        /// <summary>이번 게임이 해당 모드의 신기록이었는지.</summary>
+        public bool IsNewRecord { get; private set; }
+
         /// <summary>결과가 한 번이라도 기록되었는지 (Gameover_scene 직접 Play 검증용).</summary>
         public bool HasResult { get; private set; }
 
@@ -56,13 +62,19 @@ namespace BowlingGame
             if (instance == this) instance = null;
         }
 
-        /// <summary>게임 종료 시 GameManager 가 호출.</summary>
-        public void SetResult(int score, string modeName)
+        /// <summary>게임 종료 시 GameManager 가 호출. 최고점/신기록 정보까지 함께 전달.</summary>
+        /// <param name="score">이번 게임 최종 점수.</param>
+        /// <param name="modeName">모드명.</param>
+        /// <param name="bestScore">해당 모드의 최고 점수 (이번 게임 반영 후).</param>
+        /// <param name="isNewRecord">이번 게임이 신기록이었는지.</param>
+        public void SetResult(int score, string modeName, int bestScore, bool isNewRecord)
         {
             LastScore = score;
             LastModeName = modeName ?? string.Empty;
+            LastBestScore = bestScore;
+            IsNewRecord = isNewRecord;
             HasResult = true;
-            Debug.Log($"[ResultHolder] 결과 저장: {LastModeName} {LastScore}점");
+            Debug.Log($"[ResultHolder] 결과 저장: {LastModeName} {LastScore}점 (최고 {LastBestScore}{(IsNewRecord ? ", 신기록!" : "")})");
         }
     }
 }

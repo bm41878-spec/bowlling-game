@@ -22,6 +22,12 @@ namespace BowlingGame
         [SerializeField, Tooltip("Canvas > gameover_score — 최종 점수 표시")]
         private TMP_Text gameOverScoreText;
 
+        [SerializeField, Tooltip("Canvas > best_score — 해당 모드 최고 점수 (선택). 미할당 시 표시 생략")]
+        private TMP_Text bestScoreText;
+
+        [SerializeField, Tooltip("Canvas > new_record — 신기록 강조 (선택). 신기록 아닐 때 비활성")]
+        private TMP_Text newRecordText;
+
         [Header("Buttons")]
         [SerializeField, Tooltip("메인메뉴 — SceneManager.LoadScene(\"mainmenu\")")]
         private Button mainMenuButton;
@@ -30,6 +36,8 @@ namespace BowlingGame
         private Button quitButton;
 
         private const string MAIN_MENU_SCENE_NAME = "mainmenu";
+        private const string BEST_FORMAT          = "최고 점수: {0}";   // 최고 점수 표시 포맷 (단일 출처)
+        private const string NEW_RECORD_TEXT      = "신기록!";          // 신기록 강조 문구
 
         private void Start()
         {
@@ -55,6 +63,24 @@ namespace BowlingGame
                 gameOverScoreText.text = holder.LastScore.ToString();
                 Debug.Log($"[GameOverUI] 초기화 완료 — 점수 {holder.LastScore} 표시 (모드: {holder.LastModeName})");
             }
+
+            ApplyBestScore(holder);
+        }
+
+        /// <summary>최고 점수 + 신기록 강조 표시 (선택 필드, 미할당 시 생략).</summary>
+        private void ApplyBestScore(GameResultHolder holder)
+        {
+            if (bestScoreText != null)
+                bestScoreText.text = string.Format(BEST_FORMAT, holder.LastBestScore);
+
+            if (newRecordText != null)
+            {
+                newRecordText.text = NEW_RECORD_TEXT;
+                newRecordText.gameObject.SetActive(holder.IsNewRecord);
+            }
+
+            if (holder.IsNewRecord)
+                Debug.Log($"[GameOverUI] 신기록! 최고 점수 {holder.LastBestScore} (모드: {holder.LastModeName})");
         }
 
         private void OnDestroy()

@@ -185,8 +185,11 @@ namespace BowlingGame
             int perfect = ruleConfig.GetPerfectScore();
             Debug.Log($"[GameOver] 게임 종료! 모드: {ruleConfig.ModeName}, 최종 점수: {score}점, 퍼펙트 대비: {score}/{perfect}");
 
+            // 최고 점수 기록 (Phase 8 — JSON 영속화). 실패해도 게임 흐름은 막지 않음 (SaveSystem fail-safe).
+            var record = HighScoreService.Record(ruleConfig.ModeName, ruleConfig.FrameCount, score);
+
             // 결과를 다음 씬으로 전달 + Gameover_scene 로드.
-            GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName);
+            GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName, record.BestScore, record.IsNewRecord);
             SceneManager.LoadScene(GAMEOVER_SCENE_NAME);
         }
 
