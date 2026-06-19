@@ -1,0 +1,3295 @@
+╭─── Claude Code v2.1.145 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back 민 햄!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Added `claude agents -… │
+│    Opus 4.7 · Claude Pro · bm41878@gmail.com's     │ Added `agent_id` and `… │
+│    Organization                                    │ Status line JSON input… │
+│            ~\bowling demo\bowlling-game            │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  Claude Fable 5 is currently unavailable. Please use Opus 4.8 or another available model. Learn more: https://www.anthropic.com/news/fable-mythos-access
+
+> /remote-control 
+  ⎿  Remote Control connecting…
+
+  /remote-control is active · Continue here, on your phone, or at https://claude.ai/code/session_01GTTF1Myvyg1j7cwQw4rhXk
+
+> /recap                                                                        
+  ⎿  Nothing to recap yet — send a message first.
+
+> /mcp                                                                          
+  ⎿  Failed to reconnect to UnityMCP: ConnectionRefused at
+     http://127.0.0.1:8080/mcp
+
+> /mcp                                                                          
+  ⎿  Reconnected to UnityMCP.
+
+> 지금까지 했던 내용은 무엇이있는지확인하시고 다음 단계로는 무엇이 있을지       
+  찾아주세요                                                                    
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Bash(git log --oneline -20)
+  ⎿  41de4cf chore(scene): persist Unity post-merge save (TMP serialization
+      normalize + BackWall(6))
+     13dcf32 docs: bump README §14 and AI_PROMPT_REFERENCE footer to 2026-0
+     … +23 lines (ctrl+o to expand)
+
+● Bash(git status)
+  ⎿  On branch main
+     Your branch is up to date with 'origin/main'.
+     … +14 lines (ctrl+o to expand)
+
+  Searched for 6 patterns, read 3 files, listed 2 directories (ctrl+o to expand)
+
+● 상태 파악 완료. 다음과 같이 정리됩니다.
+
+  지금까지 한 것 (요약)
+
+  Phase 1~5: ✅ 완료
+  - 셋업, 씬·핀 배치·물리, Input System, 상태 머신
+  - Frame / ScoreCalculator / FrameManager + EditMode 단위 테스트
+  (Bowling.Domain 어셈블리 분리)
+  - GameManager + BowlingRuleConfig 주입 + GameModeSelector 폴백
+
+  Phase 6 UI/UX: 🟡 진행 중
+  - 6-a ScoreboardUI ✅ — 현재 프레임 1구/2구/총점 + gameover_score 게임 종료
+  점수 표시
+  - 6-b 10프레임 동적 점수판 ❌
+  - 6-c ResultUI 🟡 — 단계 1 (골격)만 완료. Assets/Scripts/UI/ResultUI.cs:22 —
+  필드 7개 + 스텁 6개
+  - 6-d 메인메뉴 흐름 ✅ — mainmenu.unity + MainMenuUI + GameModeSelector +
+  Build Settings (mainmenu=0, Game=1) + 양 모드 Play 검증
+  - 6-e 튜토리얼 ❌
+
+  그 외 최근 작업
+  - BowlingBall.ResetToStartPosition() 3단계 방어 (검증 → 재시도 3회 → 코루틴
+  폴백)
+  - 자동 재시작 코루틴 제거 (ResultUI 패널 클릭으로 대체 예정)
+  - 최근 커밋 41de4cf: TMP serialization normalize + BackWall(6) 씬 저장
+
+  현재 uncommitted: Assets/Scenes/Game.unity (untracked, 신규), Game.unity.meta,
+   EditorBuildSettings.asset 수정 — Unity 작업 중인 상태로 보임
+
+  다음 단계 (critical path)
+
+  NEXT_SESSION.md에 명시된 대로 ResultUI 단계 2 진입이 다음 우선순위입니다. M2
+  (Vertical Slice) 마일스톤이 2026-06-20이고 오늘 2026-06-18이라 2일 남았습니다.
+
+  ┌─────────────┬────────────────────────────────┬──────────────────────────┐
+  │    단계     │             산출물             │           검증           │
+  ├─────────────┼────────────────────────────────┼──────────────────────────┤
+  │ 2.          │ Start / OnDestroy / Validate — │ Play 시 [Result] 초기화  │
+  │ 구독/해제   │  이벤트 2개 + 버튼 2개 콜백    │ 완료 로그                │
+  │ ⏳          │ 구독·해제                      │                          │
+  ├─────────────┼────────────────────────────────┼──────────────────────────┤
+  │ 3.          │ CountStrikes / CountSpares /   │                          │
+  │ 상수/헬퍼   │ FormatCount / ShowPanel /      │ 컴파일                   │
+  │             │ HidePanel                      │                          │
+  ├─────────────┼────────────────────────────────┼──────────────────────────┤
+  │             │ HandleGameInitialized(숨김) /  │                          │
+  │ 4.          │ HandleGameOver(표시+갱신) /    │ Play 시작 시 패널 숨김   │
+  │ 핸들러+콜백 │ OnRestartClicked /             │ 확인                     │
+  │             │ OnMainMenuClicked              │                          │
+  ├─────────────┼────────────────────────────────┼──────────────────────────┤
+  │             │ Canvas/ResultPanel (TMP 3 +    │ 5프레임 완주 → 패널 +    │
+  │ 5. 씬 배선  │ Button 2 + 배경) + 7개 필드    │ 점수/스트라이크/스페어 + │
+  │             │ 할당                           │  버튼 동작 검증          │
+  └─────────────┴────────────────────────────────┴──────────────────────────┘
+
+  대안 옵션 (ResultUI 끝난 뒤):
+  1. JSON SaveSystem (Phase 8) — 8개 결정사항 미해결
+  2. 10프레임 동적 점수판 (6-b)
+  3. FrameManagerTests 리팩토링 (예외 기대 케이스가 새 fail-safe 명세와 불일치)
+  4. 튜토리얼 화면 (형식 미결정)
+
+  ResultUI 단계 2 진행할까요? NEXT_SESSION.md §3-1에 추천안이 이미 적혀 있어서,
+  "추천안 그대로"라고만 답하시면 바로 작성합니다.
+
+✻ Crunched for 1m 8s
+
+※ recap: 볼링 게임의 ResultUI(게임 종료 결과 화면)를 구현 중이며, 단계 1(골격)만 완료된 상태입니다. 다음은 ResultUI 단계 2 — Start/OnDestroy/Validate 작성으로 이벤트·버튼 콜백 구독을 붙이는 작업입니다. (disable recaps in /config)
+
+> 네 추천안 그대로 진행 해주세요                                                
+
+  Read 1 file (ctrl+o to expand)
+
+● ResultUI 단계 2 작성합니다 — ScoreboardUI 단계 2 패턴 그대로 따라갑니다.
+
+● Update(Assets\Scripts\UI\ResultUI.cs)
+  ⎿  Added 49 lines, removed 2 lines
+       46          [SerializeField, Tooltip("메인메뉴 — SceneManager.Load
+           Scene(\"mainmenu\")")]
+       47          private Button mainMenuButton;
+       48  
+       49 -        private void Start()      { /* 단계 2 */ }            
+       50 -        private void OnDestroy()  { /* 단계 2 */ }            
+       49 +        private void Start()                                  
+       50 +        {                                                     
+       51 +            if (!Validate())                                  
+       52 +            {                                                 
+       53 +                enabled = false;                              
+       54 +                return;                                       
+       55 +            }                                                 
+       56  
+       57 +            frameManager.OnGameInitialized += HandleGameInitia
+          +lized;                                                        
+       58 +            frameManager.OnGameOver        += HandleGameOver; 
+       59 +                                                              
+       60 +            restartButton.onClick.AddListener(OnRestartClicked
+          +);                                                            
+       61 +            mainMenuButton.onClick.AddListener(OnMainMenuClick
+          +ed);                                                          
+       62 +                                                              
+       63 +            // 초기 상태: 패널 숨김 (단계 3 에서 HidePanel()  
+          +헬퍼로 리팩토링 예정)                                         
+       64 +            panelRoot.SetActive(false);                       
+       65 +                                                              
+       66 +            Debug.Log("[Result] 초기화 완료 — FrameManager 이 
+          +벤트 + 버튼 콜백 구독");                                      
+       67 +        }                                                     
+       68 +                                                              
+       69 +        private void OnDestroy()                              
+       70 +        {                                                     
+       71 +            if (frameManager != null)                         
+       72 +            {                                                 
+       73 +                frameManager.OnGameInitialized -= HandleGameIn
+          +itialized;                                                    
+       74 +                frameManager.OnGameOver        -= HandleGameOv
+          +er;                                                           
+       75 +            }                                                 
+       76 +            if (restartButton  != null) restartButton.onClick.
+          +RemoveListener(OnRestartClicked);                             
+       77 +            if (mainMenuButton != null) mainMenuButton.onClick
+          +.RemoveListener(OnMainMenuClicked);                           
+       78 +        }                                                     
+       79 +                                                              
+       80 +        private bool Validate()                               
+       81 +        {                                                     
+       82 +            if (frameManager == null)                         
+       83 +            { Debug.LogError("[Result] frameManager 참조 누락"
+          +); return false; }                                            
+       84 +            if (panelRoot == null)                            
+       85 +            { Debug.LogError("[Result] panelRoot 참조 누락"); 
+          +return false; }                                               
+       86 +            if (finalScoreText == null)                       
+       87 +            { Debug.LogError("[Result] finalScoreText 참조 누 
+          +락"); return false; }                                         
+       88 +            if (strikeCountText == null)                      
+       89 +            { Debug.LogError("[Result] strikeCountText 참조 누
+          +락"); return false; }                                         
+       90 +            if (spareCountText == null)                       
+       91 +            { Debug.LogError("[Result] spareCountText 참조 누 
+          +락"); return false; }                                         
+       92 +            if (restartButton == null)                        
+       93 +            { Debug.LogError("[Result] restartButton 참조 누락
+          +"); return false; }                                           
+       94 +            if (mainMenuButton == null)                       
+       95 +            { Debug.LogError("[Result] mainMenuButton 참조 누 
+          +락"); return false; }                                         
+       96 +            return true;                                      
+       97 +        }                                                     
+       98 +                                                              
+       99          private void HandleGameInitialized() { /* 단계 4 */ }
+      100          private void HandleGameOver()        { /* 단계 4 */ }
+      101  
+
+● 단계 2 작성 완료. 다음을 추가했습니다:
+
+  - Start() — Validate() 가드 → FrameManager 이벤트 2개 구독 → 버튼 2개 리스너
+  등록 → panelRoot.SetActive(false) 직접 호출 (단계 3에서 HidePanel() 헬퍼로
+  리팩토링 예정) → [Result] 초기화 완료 로그
+  - OnDestroy() — null 체크 후 이벤트/리스너 대칭 해제 (ScoreboardUI와 동일
+  패턴)
+  - Validate() — 직렬화 필드 7개 (frameManager / panelRoot / finalScoreText /
+  strikeCountText / spareCountText / restartButton / mainMenuButton) 각각 null
+  체크 + [Result] prefix 에러 로그
+
+  단계 2 검증 방법
+
+  1. Unity Editor로 돌아가 컴파일 통과 확인 (read_console로 에러 없는지)
+  2. 임시로 Game.unity Canvas에 ResultUI 컴포넌트 부착 후 7개 필드 채우기 (또는
+  빈 GameObject에 부착) — 단계 5에서 정식 배선
+  3. mainmenu → 쇼트/풀 버튼 → Game 진입 → 콘솔에 [Result] 초기화 완료 — 
+  FrameManager 이벤트 + 버튼 콜백 구독 로그 확인
+  4. 필드 미할당으로 띄우면 [Result] xxx 참조 누락 에러로 갈리는지 확인 (가드
+  동작 검증)
+
+  검증 통과하면 단계 3 (상수 + CountStrikes / CountSpares / FormatCount /
+  ShowPanel / HidePanel 헬퍼) 진행할까요?
+
+✻ Churned for 35s
+
+> 네 플레이 모드에 진입해서 검증해주시고 통과하면 3단계 진행 부탁드립니다       
+
+● Unity MCP로 검증합니다. 먼저 도구 스키마를 가져오고 인스턴스를 확인합니다.
+  Called UnityMCP (ctrl+o to expand)
+
+  Called UnityMCP (ctrl+o to expand)
+
+  Called UnityMCP (ctrl+o to expand)
+
+● 컴파일 0 errors / 0 warnings. 이제 Play 모드 진입해서 회귀 없이 정상
+  동작하는지 확인합니다. (ResultUI는 아직 씬에 부착되지 않았으므로 [Result]
+  로그는 단계 5에서 검증되고, 지금은 컴파일·회귀 확인이 목적입니다.)
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● 검증 통과. 새로 추가한 코드로 인한 에러나 회귀는 없습니다:
+  - [Scoreboard] 초기화 완료 ✓
+  - [FrameManager] 초기화 완료 (모드: 쇼트 모드, 총 5프레임) ✓
+  - [GameManager] BeginGame → AimingPosition 전이 ✓
+  - [PinManager] 전체 핀 리셋 완료 ✓
+
+  [Result] 초기화 완료 로그는 ResultUI가 아직 씬에 부착되지 않아 보이지 않는
+  것이 정상 (단계 5 씬 배선 시 검증 예정). "2 audio listeners" 경고는 기존 씬
+  상태로 새 변경과 무관합니다.
+
+  Called UnityMCP (ctrl+o to expand)
+
+● 검증 통과. 단계 3 진행합니다 — 먼저 FrameManager에 프레임 접근 API가 어떻게
+  노출되는지 확인합니다.
+
+  Read 2 files (ctrl+o to expand)
+
+● FrameManager는 GetFrameCount() + GetFrame(i)로 프레임 접근 가능. 단계 3
+  작성합니다.
+
+● Update(Assets\Scripts\UI\ResultUI.cs)
+  ⎿  Added 4 lines
+      46          [SerializeField, Tooltip("메인메뉴 — SceneManager.LoadS
+          cene(\"mainmenu\")")]
+      47          private Button mainMenuButton;
+      48  
+      49 +        // 표시 규칙 단일 출처(single source of truth)         
+      50 +        private const string COUNT_FORMAT          = "{0}회";  
+         +    // 스트라이크/스페어 횟수 포맷                             
+      51 +        private const string MAIN_MENU_SCENE_NAME  = "mainmenu"
+         +;    // 메인메뉴 씬 이름 (Build Settings index 0)              
+      52 +                                                               
+      53          private void Start()
+      54          {
+      55              if (!Validate())
+
+● Update(Assets\Scripts\UI\ResultUI.cs)
+  ⎿  Added 2 lines, removed 2 lines
+      64              restartButton.onClick.AddListener(OnRestartClicked)
+          ;
+      65              mainMenuButton.onClick.AddListener(OnMainMenuClicke
+          d);
+      66  
+      67 -            // 초기 상태: 패널 숨김 (단계 3 에서 HidePanel() 헬
+         -퍼로 리팩토링 예정)                                            
+      68 -            panelRoot.SetActive(false);                        
+      67 +            // 초기 상태: 패널 숨김                            
+      68 +            HidePanel();                                       
+      69  
+      70              Debug.Log("[Result] 초기화 완료 — FrameManager 이벤
+          트 + 버튼 콜백 구독");
+      71          }
+
+● Update(Assets\Scripts\UI\ResultUI.cs)
+  ⎿  Added 33 lines
+      100              return true;
+      101          }
+      102  
+      103 +        /// <summary>모든 프레임 중 스트라이크 횟수.</summary>
+      104 +        private int CountStrikes()                            
+      105 +        {                                                     
+      106 +            int count = 0;                                    
+      107 +            int frameCount = frameManager.GetFrameCount();    
+      108 +            for (int i = 0; i < frameCount; i++)              
+      109 +            {                                                 
+      110 +                if (frameManager.GetFrame(i).IsStrike()) count
+          +++;                                                           
+      111 +            }                                                 
+      112 +            return count;                                     
+      113 +        }                                                     
+      114 +                                                              
+      115 +        /// <summary>모든 프레임 중 스페어 처리 횟수 (0/10 스 
+          +페어 포함, <see cref="Frame.IsSpare"/> 기준).</summary>       
+      116 +        private int CountSpares()                             
+      117 +        {                                                     
+      118 +            int count = 0;                                    
+      119 +            int frameCount = frameManager.GetFrameCount();    
+      120 +            for (int i = 0; i < frameCount; i++)              
+      121 +            {                                                 
+      122 +                if (frameManager.GetFrame(i).IsSpare()) count+
+          ++;                                                            
+      123 +            }                                                 
+      124 +            return count;                                     
+      125 +        }                                                     
+      126 +                                                              
+      127 +        /// <summary>"N회" 형식 문자열 생성.</summary>        
+      128 +        private string FormatCount(int count) => string.Format
+          +(COUNT_FORMAT, count);                                        
+      129 +                                                              
+      130 +        /// <summary>결과 패널 표시.</summary>                
+      131 +        private void ShowPanel() => panelRoot.SetActive(true);
+      132 +                                                              
+      133 +        /// <summary>결과 패널 숨김.</summary>                
+      134 +        private void HidePanel() => panelRoot.SetActive(false)
+          +;                                                             
+      135 +                                                              
+      136          private void HandleGameInitialized() { /* 단계 4 */ }
+      137          private void HandleGameOver()        { /* 단계 4 */ }
+      138  
+
+● 이제 컴파일 확인합니다.
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+● 단계 3 작성 완료. 컴파일 클린 (errors 0 / warnings 0).
+
+  추가된 내용:
+  - 상수 2개 (필드 블록 하단)
+    - COUNT_FORMAT = "{0}회" — 횟수 포맷 단일 출처
+    - MAIN_MENU_SCENE_NAME = "mainmenu" — 메인메뉴 씬 이름 (단계 4 콜백에서
+  사용)
+  - 순수 함수 3개
+    - CountStrikes() — frameManager.GetFrameCount() 순회 + IsStrike() 카운트
+    - CountSpares() — 동일 패턴 + IsSpare() (0/10 스페어 포함)
+    - FormatCount(int) — string.Format(COUNT_FORMAT, count) → "N회"
+  - 사이드이펙트 헬퍼 2개
+    - ShowPanel() / HidePanel() — panelRoot.SetActive(true|false)
+  - Start() 리팩토링 — panelRoot.SetActive(false) → HidePanel() 호출로 교체
+  (단계 2 직접 호출이 헬퍼로 이전)
+
+  다음
+
+  단계 4 (핸들러 + 콜백) — HandleGameInitialized(숨김) /
+  HandleGameOver(ShowPanel + 3개 텍스트 갱신) /
+  OnRestartClicked(GameManager.Instance.RestartGame()) /
+  OnMainMenuClicked(SceneManager.LoadScene(MAIN_MENU_SCENE_NAME)) 진행할까요? 이
+   단계는 컴파일 외 검증이 까다로워 (씬 배선이 아직이라 Play로 핸들러 호출까지
+  가지 못함) 단계 5와 묶어서 배선하면서 끝까지 검증하는 것도 가능합니다.
+
+✻ Cogitated for 3m 27s
+
+※ recap: ResultUI 5단계 점진 개발 중이고 단계 3 (상수·헬퍼) 까지 완료, 컴파일 클린. 다음은 단계 4 (HandleGameInitialized·HandleGameOver·OnRestartClicked·OnMainMenuClicked 핸들러+콜백) 작성 진행 여부 확인. (disable recaps in /config)
+
+> 네 다음 단계 진행 부탁드립니다s                                               
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Update(Assets\Scripts\UI\ResultUI.cs)
+  ⎿  Added 30 lines, removed 4 lines
+      133          /// <summary>결과 패널 숨김.</summary>
+      134          private void HidePanel() => panelRoot.SetActive(false)
+           ;
+      135  
+      136 -        private void HandleGameInitialized() { /* 단계 4 */ } 
+      137 -        private void HandleGameOver()        { /* 단계 4 */ } 
+      136 +        private void HandleGameInitialized()                  
+      137 +        {                                                     
+      138 +            HidePanel();                                      
+      139 +            Debug.Log("[Result] 게임 초기화 — 패널 숨김");    
+      140 +        }                                                     
+      141  
+      139 -        private void OnRestartClicked()      { /* 단계 4 */ } 
+      140 -        private void OnMainMenuClicked()     { /* 단계 4 */ } 
+      142 +        private void HandleGameOver()                         
+      143 +        {                                                     
+      144 +            int finalScore = frameManager.GetTotalScore();    
+      145 +            int strikes    = CountStrikes();                  
+      146 +            int spares     = CountSpares();                   
+      147 +                                                              
+      148 +            finalScoreText.text  = finalScore.ToString();     
+      149 +            strikeCountText.text = FormatCount(strikes);      
+      150 +            spareCountText.text  = FormatCount(spares);       
+      151 +                                                              
+      152 +            ShowPanel();                                      
+      153 +            Debug.Log($"[Result] 게임 종료 — 패널 표시 (점수 {
+          +finalScore}, 스트라이크 {strikes}회, 스페어 {spares}회)");    
+      154 +        }                                                     
+      155 +                                                              
+      156 +        private void OnRestartClicked()                       
+      157 +        {                                                     
+      158 +            Debug.Log("[Result] 재시작 버튼 클릭 — GameManager
+          +.RestartGame() 호출");                                        
+      159 +            GameManager.Instance.RestartGame();               
+      160 +        }                                                     
+      161 +                                                              
+      162 +        private void OnMainMenuClicked()                      
+      163 +        {                                                     
+      164 +            Debug.Log($"[Result] 메인메뉴 버튼 클릭 — SceneMan
+          +ager.LoadScene(\"{MAIN_MENU_SCENE_NAME}\")");                 
+      165 +            SceneManager.LoadScene(MAIN_MENU_SCENE_NAME);     
+      166 +        }                                                     
+      167      }
+      168  }
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● 단계 4 완료. 컴파일 클린.
+
+● 추가된 4개 메서드:
+
+  ┌─────────────────────────┬────────────────────────────────────────────────┐
+  │         메서드          │                      동작                      │
+  ├─────────────────────────┼────────────────────────────────────────────────┤
+  │ HandleGameInitialized() │ HidePanel() + [Result] 게임 초기화 — 패널 숨김 │
+  │                         │  로그                                          │
+  ├─────────────────────────┼────────────────────────────────────────────────┤
+  │ HandleGameOver()        │ 점수/스트라이크/스페어 계산 → 3개 TMP 갱신 →   │
+  │                         │ ShowPanel() + 종합 로그                        │
+  ├─────────────────────────┼────────────────────────────────────────────────┤
+  │ OnRestartClicked()      │ GameManager.Instance.RestartGame() 호출 + 로그 │
+  ├─────────────────────────┼────────────────────────────────────────────────┤
+  │ OnMainMenuClicked()     │ SceneManager.LoadScene(MAIN_MENU_SCENE_NAME) + │
+  │                         │  로그                                          │
+  └─────────────────────────┴────────────────────────────────────────────────┘
+
+  다음: 단계 5 (씬 배선)
+
+  이제 Game.unity Canvas에 ResultPanel 자식 노드를 만들고 ResultUI 컴포넌트를
+  부착해야 합니다. 권장 구조 (NEXT_SESSION.md §4):
+
+  Canvas (ResultUI 부착)
+  └── ResultPanel (= panelRoot, 배경 Image)
+      ├── final_score      (TMP_Text)
+      ├── strike_count     (TMP_Text)
+      ├── spare_count      (TMP_Text)
+      ├── restart_button   (Button)
+      └── main_menu_button (Button)
+
+  씬 편집 방식 선택해주세요:
+
+  A. MCP로 자동 배선 — 노드 생성·Rect 배치·ResultUI 부착·필드 7개 할당까지 제가
+  수행. 빠르지만 레이아웃 미세조정은 Editor에서 직접 다듬어야 함.
+
+  B. 수기 배치 + 가이드 — 어떤 노드를 어디에 만들고 어떤 값으로 채워야 하는지
+  단계별 가이드를 드리고, 사용자가 직접 Editor에서 배치. 레이아웃 자유도 높음.
+
+  C. 하이브리드 — 제가 노드만 생성하고 (ResultPanel + 자식 5개 + ResultUI
+  컴포넌트), Rect/색/폰트 등 시각 디테일은 사용자가 직접 조정.
+
+  추천: C (하이브리드) — 구조 작업의 반복성을 제가 제거하고, 디자인 결정은
+  사용자가 유지.
+
+✻ Brewed for 58s
+
+※ recap: ResultUI 5단계 점진 개발 진행 중, 단계 2~4 (구독·헬퍼·핸들러) 완료 및 컴파일 통과. 다음은 단계 5 씬 배선으로, Canvas에 ResultPanel 자식 구조를 만드는 작업 방식(A 자동/B 수기/C 하이브리드) 선택만 남아 있습니다. (disable recaps in /config)
+
+> 일단은 A로 먼저 해주세요 제가 나중에 수정 하겠습니다 수정하기 편하게 배선     
+  해노아 주시고 설명도 자세하게 적어서 정리 해주세요 정리 하신 내용은 이미      
+  reademe와 nextsession md 파일에 정리 해주시면 됩니다                          
+
+● 먼저 필요한 MCP 도구 로드 + 현재 Canvas 구조 파악합니다.
+
+  Called UnityMCP 3 times (ctrl+o to expand)
+
+● Canvas (id=49980)에 ScoreboardUI 부착됨. FrameManager (id=49714)도 확인. 활성
+  씬 경로 확인 후 진행합니다.
+
+  Called UnityMCP (ctrl+o to expand)
+
+● 씬 경로는 Assets/Scenes/Game.unity. 단, buildIndex=-1로 보이는데 (README는 1로
+   명시) — 이 부분은 나중에 짚겠습니다. 일단 씬 배선 진행합니다.
+
+  Called UnityMCP (ctrl+o to expand)
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● 배선 완료. NotoSansKR-Black SDF 폰트 자동 적용. 씬 저장 성공. 이제 Play 모드로
+   검증합니다.
+
+  Called UnityMCP 4 times (ctrl+o to expand)
+● 검증 완료. Play 모드에서 [Result] 초기화 완료 + [Result] 게임 초기화 — 패널 
+  숨김 로그 정상 출력, 에러 0개. Build Settings 상태도 한번 확인합니다.
+
+  Called UnityMCP (ctrl+o to expand)
+
+● ⚠️ 중요 발견 — Build Settings 가 Assets/Game.unity (루트의 untracked 파일) 를
+  가리키는데, ResultUI는 Assets/Scenes/Game.unity (canonical) 에 배선되었습니다.
+   이건 별도 이슈로 마지막에 짚겠습니다. 일단 문서 갱신부터.
+
+  Read 1 file (ctrl+o to expand)
+
+● README.md §14 갱신합니다 — 단계 2~5 완료 반영 + 씬 배선 상세 (수정 가이드
+  포함) + Build Settings 이슈 플래그.
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      367  
+      368  ---
+      369  
+      370 -## 14. 구현 현황 (2026-06-07 기준)                            
+      370 +## 14. 구현 현황 (2026-06-18 기준)                            
+      371  
+      372  본 섹션은 위 설계 명세 대비 실제 구현 진척도를 추적한다. 설계 
+           §1~13 은 변경하지 않고 본 섹션만 갱신.
+      373  
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      383  | 6 | UI/UX | 🟡 진행 중 |
+      384  | &nbsp;&nbsp;6-a | 점수판 — 현재 프레임의 1구/2구/총점 (`Scor
+           eboardUI`) | ✅ 완료 (씬 배선 + Play 검증 완료) |
+      385  | &nbsp;&nbsp;6-b | 점수판 — 10프레임 모두 동적 생성 | ❌ 미착
+           수 |
+      386 -| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/ 
+          -스페어 + 재시작·메뉴 버튼 | 🟡 **진행 중** — ScoreboardUI 의 `
+          -gameover_score` 표시 완료 (노트북 통합) + `ResultUI` 단계 1 ( 
+          -골격) 완료. 자동 재시작 코루틴은 제거됨 (ResultUI 패널 클릭으 
+          -로 교체 예정). 단계 2~5 대기 — `NEXT_SESSION.md` 참조 |       
+      386 +| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/ 
+          +스페어 + 재시작·메뉴 버튼 | ✅ 완료 (단계 1~5 모두 완료, 2026-
+          +06-18) — `Assets/Scenes/Game.unity` Canvas 에 ResultPanel + 자
+          +식 5개 자동 배선, Play 검증 `[Result] 초기화 완료` + `[Result]
+          + 게임 초기화 — 패널 숨김` 로그 통과 |                         
+      387  | &nbsp;&nbsp;6-d | 메인 메뉴 → 게임 씬 전이 + 모드 선택 | ✅ 
+           완료 (`mainmenu.unity` 구성 + `MainMenuUI` + `GameModeSelector
+           ` + Build Settings 등록 + 양 모드 Play 검증) |
+      388  | &nbsp;&nbsp;6-e | 튜토리얼 화면 | ❌ 미착수 (형식 미결정) |
+      389  | 7 | 폴리싱 (효과음/BGM/파티클/스킨) | ❌ 미착수 |
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      397  - **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `Ga
+           meManager`(싱글톤, `[DefaultExecutionOrder(1000)]`) — ModeSele
+           ctor 폴백 분기 포함, **`GameModeSelector`** (DontDestroyOnLoad
+            싱글톤 — 신규)
+      398  - **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager
+           `, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDe
+           tector`, `ThrowTransitionController` — `BowlingBall.ResetToSta
+           rtPosition()` 에 위치 검증·재시도·최종 폴백 로직 포함
+      399  - **Scoring** (`Bowling.Scoring`, Unity 비의존 어셈블리 `Bowli
+           ng.Domain`): `Frame`, `FrameType`, `ScoreCalculator`(정적), `S
+           coringConstants`(정적), `FrameManager`(MonoBehaviour), `Bowlin
+           gRuleConfig`(ScriptableObject, `BowlingGame` 네임스페이스 — 어
+           셈블리 주의)
+      400 -- **UI**: `PowerGaugeUI`, `ScoreboardUI` (`gameover_score` TMP
+          -_Text 연동 포함), **`MainMenuUI`** (신규), **`ResultUI`** (골 
+          -격만, 신규)                                                   
+      400 +- **UI**: `PowerGaugeUI`, `ScoreboardUI` (`gameover_score` TMP
+          +_Text 연동 포함), **`MainMenuUI`**, **`ResultUI`** (완료 — Can
+          +vas 부착, ResultPanel + 자식 5개, 7개 SerializeField 모두 와이
+          +어링)                                                         
+      401  - **Debug**: `DebugResetController` (R 키 → `GameManager.Resta
+           rtGame()`)
+      402  - **Persistence**: `GameRecord`, `SaveData` (TODO)
+      403  
+
+● Update(README.md)
+  ⎿  Added 2 lines, removed 1 line
+      406  - **`Assets/Scenes/Game.unity`** — 메인 게임 씬. 점수판 포함, 
+           Play 시 즉시 1프레임 시작.
+      407    - GameObject 10개 (Main Camera, Directional Light, Ground, L
+           ane_Root, BowlingBall, GameManager ⓐ/ⓑ, HUD_Canvas, EventSyste
+           m, Canvas)
+      408    - **GameManager 두 개 분리**: ⓐ는 GameStateManager+InputCont
+           roller+DebugResetController, ⓑ는 GameManager+PhysicsSettleDete
+           ctor+ThrowTransitionController+FrameManager
+      409 -  - Canvas 자식: `total_score`/`total_score_n`, `current_frame
+          -`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec`, **`gam
+          -eover_score`** + `ScoreboardUI` 컴포넌트 부착                 
+      409 +  - Canvas 자식: `total_score`/`total_score_n`, `current_frame
+          +`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec`, **`gam
+          +eover_score`**, **`ResultPanel`** (=`panelRoot`, 5자식: `final
+          +_score`, `strike_count`, `spare_count`, `restart_button`, `mai
+          +n_menu_button`)                                               
+      410 +  - Canvas 부착 컴포넌트: `ScoreboardUI`, **`ResultUI`** (단계
+          + 5 자동 배선, 2026-06-18) — 자세한 좌표·치수·수정 가이드는 §14
+          +-10 참조                                                      
+      411  - **`Assets/Scenes/mainmenu.unity`** — 메인메뉴 씬 (Build inde
+           x 0, 시작 씬)
+      412    - 루트 GameObject 6개: Main Camera, Directional Light, Globa
+           l Volume, **GameModeSelector**, EventSystem (InputSystemUIInpu
+           tModule), **Canvas** (MainMenuUI 부착)
+      413    - Canvas 자식 3개: `Title` (TMP "Bowling Champion"), `ShortB
+           utton` (Button+Image+Label), `FullButton` (Button+Image+Label)
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      421  ### 14-5. Build Settings
+      422  
+      423  - index 0: `Assets/Scenes/mainmenu.unity` (시작 씬)
+      424 -- index 1: `Assets/Scenes/Game.unity`                         
+      424 +- index 1: ⚠️ 현재 `Assets/Game.unity` (루트 — untracked 신규 
+          +파일) 로 등록되어 있음. 의도는 `Assets/Scenes/Game.unity` (can
+          +onical) 였으나 누군가가 씬을 루트로 복제 저장하면서 Build Sett
+          +ings 도 그에 맞춰 갱신된 상태. ResultUI 등 모든 최신 배선은 `A
+          +ssets/Scenes/Game.unity` 에 있으므로 **다음 세션에서 정리 필요
+          +** (둘 중 하나로 통합 + Build Settings 재등록 + 중복 씬 삭제).
+          + 자세한 진단·복구는 §14-10 마지막 참조                        
+      425  
+      426  ### 14-6. 다음 작업
+      427  
+
+● Update(README.md)
+  ⎿  Added 13 lines, removed 13 lines
+      425  
+      426  ### 14-6. 다음 작업
+      427  
+      428 -**ResultUI 단계 2~5** 재개가 다음 우선순위. M2 (Vertical Slice
+          -, 6월 20일) 까지의 critical path.                             
+      428 +**우선순위 1 — Build Settings / 씬 중복 정리** (M2 차단 가능성
+          +). §14-5 와 §14-10 끝 참조. 둘 중 하나 결정:                  
+      429 +1. `Assets/Game.unity` (루트, 최신) 를 `Assets/Scenes/Game.uni
+          +ty` 로 덮어 저장 후 루트 파일 삭제 + Build Settings index 1 을
+          + `Assets/Scenes/Game.unity` 로 재등록 — **권장**              
+      430 +2. `Assets/Scenes/Game.unity` 를 폐기하고 루트 `Assets/Game.un
+          +ity` 를 표준 위치로 인정 (`.meta` GUID 변경 영향 고려 필요)   
+      431  
+      430 -- 단계 1 (골격) 완료: `Assets/Scripts/UI/ResultUI.cs` — using,
+          - 직렬화 필드 7개, 메서드 스텁                                 
+      431 -- 단계 2 (구독/해제) → 3 (상수/헬퍼) → 4 (핸들러/콜백) → 5 (씬
+          - 배선)                                                        
+      432 -- ResultUI 의 "메인메뉴" 버튼은 이미 작동 가능한 상태 (mainmen
+          -u.unity 구성 완료)                                            
+      433 -- `ScoreboardUI.gameOverScoreText` 와 ResultUI 패널의 역할 분 
+          -담은 단계 5 (씬 배선) 시점에 결정 — 현재 큰 점수만 표시되는 `g
+          -ameover_score` 위에 ResultUI 패널을 오버레이할지, ResultPanel 
+          -안으로 흡수할지                                               
+      432 +**우선순위 2 — 게임 종료 시나리오 실제 검증**. 단계 5 까지의  
+          +정적 검증 (`[Result] 초기화 완료`/`[Result] 게임 초기화 — 패널
+          + 숨김`) 은 통과했으나, **5프레임 완주 후 패널 표시 + 점수/스트
+          +라이크/스페어 갱신 + 재시작·메인메뉴 버튼 동작** 의 end-to-end
+          + 검증은 다음 세션 수동 플레이로 확인 필요.                    
+      433  
+      435 -**ResultUI 완료 이후 후속 우선순위**:                         
+      436 -- JSON SaveSystem (Phase 8) — 2026-06-05 검토된 작업 윤곽:    
+      437 -  - `SaveSystem` (static): `Save(SaveData)` / `Load() → SaveDa
+          -ta` + 파일 I/O + 예외 처리                                    
+      438 -  - `HighScoreService`: `GameRecord` 생성·정렬·상위 N개 유지· 
+          -중복 정책                                                     
+      439 -  - `GameManager.OnEnterGameOver` 에서 `HighScoreService.Recor
+          -d(...)` 호출 연동                                             
+      440 -  - 저장 경로: `Application.persistentDataPath/save.json`     
+      441 -  - 직렬화: JsonUtility (1순위) 또는 Newtonsoft.Json (확장 시 
+          -검토)                                                         
+      442 -  - 결정 필요한 8개 항목: 직렬화 라이브러리 / 저장 시점 / high
+          -Scores 상한 / 정렬 정책 / 첫 실행 처리 / 저장 실패 정책 / 백업
+          -·복구 / 세이브 데이터 버전 관리                               
+      434 +**우선순위 3 — JSON SaveSystem** (Phase 8):                   
+      435 +- `SaveSystem` (static): `Save(SaveData)` / `Load() → SaveData
+          +` + 파일 I/O + 예외 처리                                      
+      436 +- `HighScoreService`: `GameRecord` 생성·정렬·상위 N개 유지·중 
+          +복 정책                                                       
+      437 +- `GameManager.OnEnterGameOver` 에서 `HighScoreService.Record(
+          +...)` 호출 연동                                               
+      438 +- 저장 경로: `Application.persistentDataPath/save.json`       
+      439 +- 직렬화: JsonUtility (1순위) 또는 Newtonsoft.Json (확장 시 검
+          +토)                                                           
+      440 +- 결정 필요한 8개 항목: 직렬화 라이브러리 / 저장 시점 / highSc
+          +ores 상한 / 정렬 정책 / 첫 실행 처리 / 저장 실패 정책 / 백업· 
+          +복구 / 세이브 데이터 버전 관리                                
+      441  
+      442 +**우선순위 4 — 10프레임 동적 점수판** (6-b) / **튜토리얼 화면*
+          +* (6-e) / **FrameManagerTests 리팩토링**.                     
+      443 +                                                              
+      444  ### 14-7. 이전 세션 변경 (2026-06-05)
+      445  
+      446  자세한 진단·수정 기록은 **`SESSION_2026-06-05.md`** 참조.
+
+● 이제 새 세션 변경 섹션 §14-10 (ResultUI 단계 2-5 + 씬 배선 상세) 추가 + §14-9
+  → §14-11 로 renumber.
+
+● Update(README.md)
+  ⎿  Added 117 lines, removed 1 line
+      462  | ResultUI 골격 (신규) | `Assets/Scripts/UI/ResultUI.cs` | 결
+           과 화면 UI 5단계 점진 개발 중 **단계 1 (골격) 완료** — using, 
+           XML 주석, Header 4그룹 직렬화 필드 7개, 메서드 스텁 6개. 단계 
+           2~5 (구독/해제·상수/헬퍼·핸들러/콜백·씬 배선) 대기 — `NEXT_SES
+           SION.md` |
+      463  | 자동 재시작 코루틴 제거 (revert) | `GameManager.cs` | 노트북
+            브랜치의 `GAMEOVER_DISPLAY_DURATION` / `gameOverCoroutine` / 
+           `GameOverDelayCoroutine` / RestartGame 의 코루틴 중단 로직 / `
+           using System.Collections;` 모두 **제거**. 사용자 결정 (2026-06
+           -07): 자동 재시작이 ResultUI 패널의 명시 클릭(재시작/메인메뉴)
+            으로 대체됨. `gameover_score` 표시 자체는 ScoreboardUI 측에 
+           유지 |
+      464  
+      465 -### 14-9. 참고 문서                                           
+      465 +### 14-10. 최근 세션 변경 (2026-06-18) — ResultUI 단계 2~5 완 
+          +료                                                            
+      466  
+      467 +본 세션에서 `ResultUI` 의 단계 2 (구독/해제 + Validate) → 단계
+          + 3 (상수 + 헬퍼) → 단계 4 (핸들러 + 콜백) → 단계 5 (씬 배선)  
+          +을 모두 완료했다. 코드와 씬 양쪽 모두 `Assets/Scripts/UI/Resul
+          +tUI.cs` 와 `Assets/Scenes/Game.unity` 에 영구 반영됨.         
+      468 +                                                              
+      469 +#### 14-10-1. 코드 변경 (`Assets/Scripts/UI/ResultUI.cs`)     
+      470 +                                                              
+      471 +| 단계 | 추가 내용 |                                          
+      472 +|---|---|                                                     
+      473 +| 2 | `Start()` — `Validate()` → 이벤트 2개 (`OnGameInitialize
+          +d`, `OnGameOver`) 구독 → 버튼 2개 (`restartButton`, `mainMenuB
+          +utton`) `onClick.AddListener` → `HidePanel()` 호출 → `[Result]
+          + 초기화 완료` 로그. `OnDestroy()` — null 가드 후 대칭 해제. `V
+          +alidate()` — 직렬화 필드 7개 (`frameManager`, `panelRoot`, `fi
+          +nalScoreText`, `strikeCountText`, `spareCountText`, `restartBu
+          +tton`, `mainMenuButton`) null 체크 + `[Result]` prefix 에러 로
+          +그. ScoreboardUI 와 동일 패턴 |                               
+      474 +| 3 | 상수 2개 — `COUNT_FORMAT = "{0}회"` (횟수 포맷 단일 출처
+          +), `MAIN_MENU_SCENE_NAME = "mainmenu"`. 순수 함수 3개 — `Count
+          +Strikes()` / `CountSpares()` 는 `frameManager.GetFrameCount()`
+          + 순회 + `Frame.IsStrike()`/`IsSpare()` 카운트 (0/10 스페어 포 
+          +함). `FormatCount(int)` 는 `string.Format(COUNT_FORMAT, n)`.  
+          +사이드이펙트 헬퍼 2개 — `ShowPanel()`/`HidePanel()` 는 `panelR
+          +oot.SetActive(true/false)`. 단계 2 의 직접 호출 `panelRoot.Set
+          +Active(false)` 를 `HidePanel()` 로 리팩토링 |                 
+      475 +| 4 | `HandleGameInitialized()` — `HidePanel()` + `[Result] 게
+          +임 초기화 — 패널 숨김` 로그. `HandleGameOver()` — `GetTotalSco
+          +re()`/`CountStrikes()`/`CountSpares()` 계산 → `finalScoreText.
+          +text = score.ToString()` / `strikeCountText.text = FormatCount
+          +(strikes)` / `spareCountText.text = FormatCount(spares)` → `Sh
+          +owPanel()` → 종합 로그. `OnRestartClicked()` — `GameManager.In
+          +stance.RestartGame()` + 로그. `OnMainMenuClicked()` — `SceneMa
+          +nager.LoadScene(MAIN_MENU_SCENE_NAME)` + 로그 |               
+      476 +| 5 | 씬 배선 — 아래 §14-10-2 참조 |                          
+      477 +                                                              
+      478 +#### 14-10-2. 씬 배선 — `ResultPanel` 노드 트리               
+      479 +                                                              
+      480 +**Editor 부착 위치**: `Canvas` (instanceID 49980, 기존 Scorebo
+          +ardUI 부착 노드) 에 `ResultUI` 컴포넌트 추가. `ResultPanel` 은
+          + 그 자식.                                                     
+      481 +                                                              
+      482 +```                                                           
+      483 +Canvas (ResultUI 부착, ScoreboardUI 와 공존)                  
+      484 +└── ResultPanel  ← panelRoot 필드 = 이 GameObject             
+      485 +    ├── final_score      ← finalScoreText                     
+      486 +    ├── strike_count     ← strikeCountText                    
+      487 +    ├── spare_count      ← spareCountText                     
+      488 +    ├── restart_button   ← restartButton (Button 컴포넌트)    
+      489 +    │   └── label                                             
+      490 +    └── main_menu_button ← mainMenuButton (Button 컴포넌트)   
+      491 +        └── label                                             
+      492 +```                                                           
+      493 +                                                              
+      494 +**ResultPanel 자체** — RectTransform + CanvasRenderer + Image 
+          +(배경)                                                        
+      495 +                                                              
+      496 +| 속성 | 값 | 수정 의미 |                                     
+      497 +|---|---|---|                                                 
+      498 +| Anchor | (0.5, 0.5)/(0.5, 0.5) | 화면 정중앙 기준 |         
+      499 +| Pivot | (0.5, 0.5) | 회전·스케일 기준점 |                   
+      500 +| Anchored Position | (0, 0) | Canvas 중앙. 옮기려면 X/Y 변경 
+          +|                                                             
+      501 +| Size Delta | (900, 700) | 패널 폭/높이. 작게 하려면 두 값 모
+          +두 감소 |                                                     
+      502 +| Image.color | (0, 0, 0, 0.85) | 반투명 검정. 알파↑→불투명, R
+          +GB→배경 색 |                                                  
+      503 +| GameObject.active | `false` (초기) | `Start()` 에서 `HidePan
+          +el()` 호출되므로 별도 조작 불필요 |                           
+      504 +                                                              
+      505 +**자식 TMP_Text 3개** — 모두 anchor/pivot (0.5, 0.5), 폰트 `No
+          +toSansKR-Black SDF` (씬 내 기존 TMP 에서 자동 차용), 색 `Color
+          +.white`, alignment `Center`                                   
+      506 +                                                              
+      507 +| 노드 | Anchored Position | Size Delta | Font Size | 초기 텍 
+          +스트 | 비고 |                                                 
+      508 +|---|---|---|---|---|---|                                     
+      509 +| `final_score`  | (0, 200) | (800, 160) | 140 | `"0"` | 가장 
+          +큰 텍스트. `HandleGameOver()` 에서 `score.ToString()` 으로 갱 
+          +신 |                                                          
+      510 +| `strike_count` | (0,  40) | (800,  80) |  48 | `"스트라이크 
+          +0회"` | `HandleGameOver()` 에서 `FormatCount(strikes)` 로 갱신
+          + → `"N회"` 만 표시 (라벨 텍스트 "스트라이크" 는 초기 placehold
+          +er 일 뿐 런타임에 사라짐). 라벨을 영구 표시하려면 별도 TMP 추 
+          +가 또는 `COUNT_FORMAT` 을 `"스트라이크 {0}회"` 로 변경 |      
+      511 +| `spare_count`  | (0, -40) | (800,  80) |  48 | `"스페어 0회"
+          +` | 동일 (스페어용) |                                         
+      512 +                                                              
+      513 +**자식 Button 2개** — 모두 anchor/pivot (0.5, 0.5), Image+Butt
+          +on 컴포넌트, `targetGraphic = Image`. 자식 `label` 은 RectTran
+          +sform stretch (0/1 ~ 0/1) + TMP                               
+      514 +                                                              
+      515 +| 노드 | Anchored Position | Size Delta | Image.color | Label 
+          +Text | Label Font Size |                                      
+      516 +|---|---|---|---|---|---|                                     
+      517 +| `restart_button`   | (-180, -200) | (320, 110) | (0.2, 0.5, 
+          +0.9, 1) (파란색) | `"재시작"` | 42 |                          
+      518 +| `main_menu_button` | ( 180, -200) | (320, 110) | (0.2, 0.5, 
+          +0.9, 1) (파란색) | `"메인메뉴"` | 42 |                        
+      519 +                                                              
+      520 +#### 14-10-3. ResultUI 컴포넌트 — Inspector 와이어링 (7개 필드
+          +)                                                             
+      521 +                                                              
+      522 +| 필드 | 타입 | 할당된 인스턴스 | Inspector 에서 확인 방법 |  
+      523 +|---|---|---|---|                                             
+      524 +| `frameManager`    | `FrameManager` | `GameManager` ⓑ (Physic
+          +sSettleDetector·ThrowTransitionController·FrameManager 보유, i
+          +nstanceID 49714) | Inspector 에서 ResultUI 컴포넌트 → frameMan
+          +ager 필드 |                                                   
+      525 +| `panelRoot`       | `GameObject`   | `Canvas > ResultPanel` 
+          +                                          | 같은 위치 panelRoo
+          +t 필드 |                                                      
+      526 +| `finalScoreText`  | `TMP_Text`     | `Canvas > ResultPanel >
+          + final_score`                             | |                 
+      527 +| `strikeCountText` | `TMP_Text`     | `Canvas > ResultPanel >
+          + strike_count`                            | |                 
+      528 +| `spareCountText`  | `TMP_Text`     | `Canvas > ResultPanel >
+          + spare_count`                             | |                 
+      529 +| `restartButton`   | `Button`       | `Canvas > ResultPanel >
+          + restart_button`                          | |                 
+      530 +| `mainMenuButton`  | `Button`       | `Canvas > ResultPanel >
+          + main_menu_button`                        | |                 
+      531 +                                                              
+      532 +> 7개 모두 본 세션의 `mcp__UnityMCP__execute_code` 호출 시 리 
+          +플렉션으로 자동 할당됨. Editor 에서 직접 다시 끌어다 놓을 필요
+          + 없음.                                                        
+      533 +                                                              
+      534 +#### 14-10-4. 자주 하게 될 수정 작업 — 빠른 레시피            
+      535 +                                                              
+      536 +| 하고 싶은 것 | 어디를 만져야 하는가 |                       
+      537 +|---|---|                                                     
+      538 +| 패널 위치 옮기기 | `ResultPanel.anchoredPosition` |         
+      539 +| 패널 크기 바꾸기 | `ResultPanel.sizeDelta` (자식들의 Anchore
+          +d Position 도 비례해서 재배치 필요) |                         
+      540 +| 배경 색/투명도 | `ResultPanel.Image.color` |                
+      541 +| 최종 점수 크기 | `final_score.fontSize` |                   
+      542 +| "스트라이크/스페어" 라벨 영구 표시 | `ResultUI.cs` 의 `COUNT
+          +_FORMAT` 상수를 `"스트라이크 {0}회"` / `"스페어 {0}회"` 로 바 
+          +꾸거나, 별도 TMP 라벨 노드를 ResultPanel 자식으로 추가 |      
+      543 +| 버튼 색 | 각 `*_button.Image.color` |                       
+      544 +| 버튼 라벨 텍스트 | 각 `*_button > label` TMP `text` |       
+      545 +| 버튼 동작 | `ResultUI.OnRestartClicked()` / `OnMainMenuClick
+          +ed()` — 게임 로직은 모두 여기에. 씬 이름 상수는 `MAIN_MENU_SCE
+          +NE_NAME` |                                                    
+      546 +| 폰트 변경 | 모든 TMP_Text 의 `font` 를 다른 SDF 폰트로 교체 
+          +(현재 `NotoSansKR-Black SDF`) |                               
+      547 +| 패널 표시 타이밍 | `ResultUI.HandleGameOver()` — `FrameManag
+          +er.OnGameOver` 이벤트가 트리거. 지연 표시를 원하면 `StartCorou
+          +tine` 으로 감싸기 |                                           
+      548 +| ScoreboardUI `gameover_score` 와의 역할 분담 | 현재 둘 다 동
+          +시 표시됨 (`gameover_score` 는 게임 영역에 큰 점수, `ResultPan
+          +el` 은 그 위에 오버레이). 어느 한쪽을 숨기려면 ScoreboardUI 의
+          + `HandleGameOver` 에서 `gameOverScoreText.text = ""` 처리 또는
+          + ResultPanel 의 배경을 불투명 (`alpha = 1.0`) 으로 |          
+      549 +                                                              
+      550 +#### 14-10-5. 재배선이 필요해질 때 — 자동화 스크립트 재실행   
+      551 +                                                              
+      552 +만약 ResultPanel 트리를 잘못 만져서 복구하고 싶다면, 본 세션에
+          +서 실행한 `mcp__UnityMCP__execute_code` 호출 (Roslyn 미사용·Co
+          +deDom 호환, `System.Func` 람다 사용) 을 다시 돌리면 됨. 호출은
+          + 멱등(idempotent) — 기존 `ResultPanel` 이 있으면 `DestroyImmed
+          +iate` 로 정리 후 재생성. 스크립트 골자:                       
+      553 +                                                              
+      554 +1. `GameObject.Find("Canvas")` → Canvas 참조                  
+      555 +2. `canvas.transform.Find("ResultPanel")` → 있으면 `DestroyImm
+          +ediate`                                                       
+      556 +3. `FindFirstObjectByType<FrameManager>()` → fm 참조          
+      557 +4. 씬 내 첫 번째 TMP_Text 에서 폰트(`NotoSansKR-Black SDF`) 차
+          +용                                                            
+      558 +5. ResultPanel + 자식 5개 생성 (`System.Func` 람다로 텍스트/버
+          +튼 빌더)                                                      
+      559 +6. Canvas 에 `ResultUI` 컴포넌트 추가 + 7개 필드 리플렉션 와이
+          +어링                                                          
+      560 +7. `EditorSceneManager.MarkSceneDirty` + `SaveScene`          
+      561 +                                                              
+      562 +#### 14-10-6. ⚠️ 미해결 — `Assets/Game.unity` 중복 + Build Sett
+          +ings 불일치                                                   
+      563 +                                                              
+      564 +세션 종료 시점 점검에서 발견:                                 
+      565 +                                                              
+      566 +- `Assets/Game.unity` (루트, **untracked** 신규 파일) 가 존재 
+      567 +- `Assets/Scenes/Game.unity` (canonical, **이번 ResultUI 배선 
+          +이 들어간 곳**) 도 존재                                       
+      568 +- `EditorBuildSettings.asset` (modified) 의 index 1 은 현재 `A
+          +ssets/Game.unity` (루트) 를 가리키고 있음                     
+      569 +- 즉 빌드 / `SceneManager.LoadScene("Game")` 시 실제로 로드되 
+          +는 씬은 루트 `Assets/Game.unity` — ResultUI 가 없는 쪽        
+      570 +                                                              
+      571 +**이번 세션 검증이 정상 통과한 이유**: Editor 의 Play 모드는  
+          +현재 열려 있는 씬 (`Assets/Scenes/Game.unity`) 을 직접 재생하 
+          +므로 Build Settings 와 무관. ResultUI 가 정상 동작한 것은 이  
+          +캐주얼 검증 한정.                                             
+      572 +                                                              
+      573 +**실제 게임 흐름 (mainmenu → Game) 에서는 ResultUI 가 보이지  
+          +않을 가능성 높음**. 다음 세션 첫 작업으로 정리 필요.          
+      574 +                                                              
+      575 +복구 절차 (권장):                                             
+      576 +1. Editor 에서 `Assets/Scenes/Game.unity` 열어둔 채로 — File >
+          + Save As → `Assets/Scenes/Game.unity` 그대로 (정상 위치 확정) 
+      577 +2. `Assets/Game.unity` 및 `Assets/Game.unity.meta` 삭제 (Proje
+          +ct 창에서 우클릭 → Delete)                                    
+      578 +3. File > Build Settings 열어서 Scenes In Build 에 `Assets/Sce
+          +nes/Game.unity` 추가 + 기존 `Assets/Game.unity` 항목 제거 (dra
+          +g-drop 으로 index 1 위치 유지)                                
+      579 +4. `EditorBuildSettings.asset` 커밋                           
+      580 +                                                              
+      581 +### 14-11. 참고 문서                                          
+      582 +                                                              
+      583  | 문서 | 용도 |
+      584  |---|---|
+      585  | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      585  | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
+      586  | `AI_PROMPT_REFERENCE.md` | AI 협업용 — 컨벤션, 시그니처, 명
+           명 규칙, "건드리지 말 것" 목록 |
+      587  | `SESSION_2026-06-05.md` | 이전 세션 (최적화·상태 흐름·해상도
+            UI) 진단·수정·검증 기록 |
+      588 -| `NEXT_SESSION.md` | ResultUI 단계 2~5 재개 가이드 |         
+      588 +| `NEXT_SESSION.md` | 다음 세션 진입점 — 2026-06-18 시점에서 B
+          +uild Settings 복구 + ResultUI end-to-end 검증 + JSON SaveSyste
+          +m 가이드로 갱신됨 |                                           
+      589  | `One-Page Concept Sheet.txt` | 게임 컨셉 / 마일스톤 (M1~M5) 
+           |
+      590  | `PROJECT_FEEDBACK.txt` | (외부 피드백 — 별도 관리) |
+      591  
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      591  
+      592  ---
+      593  
+      594 -*Custom Bowling Score System — Design Specification v1.0 / Imp
+          -lementation Snapshot 2026-06-07*                              
+      594 +*Custom Bowling Score System — Design Specification v1.0 / Imp
+          +lementation Snapshot 2026-06-18*                              
+
+● 이제 NEXT_SESSION.md 완전 갱신합니다 (ResultUI 완료 반영 + 다음 우선순위
+  재설정).
+
+● Write(NEXT_SESSION.md)
+  ⎿  Added 124 lines, removed 159 lines
+      1  # 다음 세션 재개 가이드
+      2  
+      3 -> **작성일**: 2026-06-07 (2026-05-23 최초 작성 / 2026-06-06 메인
+        -메뉴·ResultUI 골격 반영)                                        
+      4 -> **목적**: 세션 간 컨텍스트 손실 없이 ResultUI 작업을 이어가기 
+        -위한 단일 출처.                                                 
+      5 -> **선행 문서**: `README.md` §14 (구현 현황), `AI_PROMPT_REFEREN
+        -CE.md` (컨벤션·구조)                                            
+      3 +> **작성일**: 2026-06-18 (이전: 2026-06-07 ResultUI 단계 2 진입 
+        +가이드)                                                         
+      4 +> **목적**: 세션 간 컨텍스트 손실 없이 다음 우선순위를 이어가기 
+        +위한 단일 출처.                                                 
+      5 +> **선행 문서**: `README.md` §14 (특히 §14-10), `AI_PROMPT_REFER
+        +ENCE.md` (컨벤션·구조)                                          
+      6  
+      7  ---
+      8  
+     ...
+       10  
+       11  | 항목 | 값 |
+       12  |---|---|
+       13 -| 직전 완료 작업 | **ResultUI 단계 1 (골격)** + **메인메뉴 6단
+          -계 (A~F)** + Build Settings + 양 모드 Play 검증 |             
+       14 -| 다음 작업 | **`ResultUI` 단계 2~5** 이어가기 |              
+       15 -| 현재 위치 | 단계 2 (구독/해제 + Validate) **착수 대기** |   
+       16 -| 작업 방식 | 매 단계마다 (1) 클로드 추천안 제시 → (2) 사용자 
+          -명세 확정 → (3) 클로드 구현 → (4) 검증 → (5) 다음 단계 |      
+       17 -| 진행 형식 | `ScoreboardUI` 때와 동일한 4단계 + 씬 배선 패턴 
+          -|                                                             
+       13 +| 직전 완료 작업 (2026-06-18) | **`ResultUI` 단계 2~5 모두 완 
+          +료** + 씬 배선 (`Assets/Scenes/Game.unity` Canvas) + 정적 검증
+          + (`[Result] 초기화 완료` / `[Result] 게임 초기화 — 패널 숨김` 
+          +로그) |                                                       
+       14 +| 다음 작업 우선순위 | 1. ⚠️ Build Settings / 씬 중복 정리 → 2.
+          + ResultUI end-to-end 수동 검증 → 3. JSON SaveSystem → 4. 10프 
+          +레임 동적 점수판 / 튜토리얼 / 테스트 리팩토링 |               
+       15 +| 현재 위치 | **우선순위 1 (Build Settings 복구) 착수 대기** |
+       16 +| M2 마일스톤 | 2026-06-20 — 2일 남음. 우선순위 1·2 가 critica
+          +l path |                                                      
+       17  
+       18  ---
+       19  
+       20  ## 1. 어디까지 왔나 (누적 산출물)
+       21  
+       23 -### 1-1. 이전 세션 산출물 (2026-05-23)                        
+       24 -- `Assets/Scripts/UI/ScoreboardUI.cs` — 점수판 UI. Play 검증  
+          -완료.                                                         
+       25 -- `AI_PROMPT_REFERENCE.md`, `README.md` §14, `NEXT_SESSION.md`
+          - 신규 작성.                                                   
+       26 -- `Assets/Scenes/Game.unity`: ScoreboardUI 배선 완료.         
+       22 +### 1-1. 이전 세션 산출물                                     
+       23  
+       28 -### 1-2. 직전 세션 산출물 (2026-06-06)                        
+       24 +- 2026-05-23: `ScoreboardUI.cs` (단계 1~5)                    
+       25 +- 2026-06-05: BowlingBall 최적화·물리 안정성·UI 해상도 일관성 
+       26 +- 2026-06-06: 메인메뉴 흐름 6단계 (mainmenu.unity + GameModeSe
+          +lector + MainMenuUI + FullModeRule + Build Settings)          
+       27 +- 2026-06-07: ResultUI 단계 1 (골격)                          
+       28  
+       30 -**ResultUI 단계 1 (골격) — 완료:**                            
+       31 -- `Assets/Scripts/UI/ResultUI.cs` 생성 — using 6개, XML 주석, 
+          -Header 4그룹 직렬화 필드 7개, 메서드 스텁 6개. 컴파일·Play 검 
+          -증 통과 (회귀 없음).                                          
+       29 +### 1-2. 본 세션 산출물 (2026-06-18)                          
+       30  
+       33 -**메인메뉴 작업 6단계 (A~F) — 완료:**                         
+       34 -- A. `Assets/Configs/FullModeRule.asset` 생성 — 풀 모드 10프레
+          -임, 퍼펙트 150점.                                             
+       35 -- B. `Assets/Scripts/Core/GameModeSelector.cs` — DontDestroyOn
+          -Load 싱글톤. `SelectedRule` 보유, `SelectMode(rule)` 캐시.    
+       36 -- C. `GameManager.Start()` 첫 분기에 ModeSelector 폴백 로직 추
+          -가 — 인스펙터 `ruleConfig` 호환 유지.                         
+       37 -- D. `Assets/Scripts/UI/MainMenuUI.cs` — 5개 직렬화 필드, 버튼
+          - 콜백 → SelectMode → LoadScene("Game").                       
+       38 -- E. `Assets/Scenes/mainmenu.unity` 구성 — GameModeSelector + 
+          -EventSystem + Canvas (Title + ShortButton + FullButton) + Main
+          -MenuUI 배선.                                                  
+       39 -- F. Build Settings 등록 (mainmenu=index 0, Game=index 1) + 쇼
+          -트/풀 양 모드 Play 검증 통과.                                 
+       31 +**ResultUI 단계 2~5 완료**:                                   
+       32 +- 단계 2 — `Start()` / `OnDestroy()` / `Validate()` (7개 필드 
+          +null 체크)                                                    
+       33 +- 단계 3 — 상수 2개 (`COUNT_FORMAT`, `MAIN_MENU_SCENE_NAME`) +
+          + 헬퍼 5개 (`CountStrikes`, `CountSpares`, `FormatCount`, `Show
+          +Panel`, `HidePanel`)                                          
+       34 +- 단계 4 — `HandleGameInitialized` / `HandleGameOver` / `OnRes
+          +tartClicked` / `OnMainMenuClicked`                            
+       35 +- 단계 5 — `Assets/Scenes/Game.unity` Canvas 에 `ResultPanel` 
+          +자동 배선 (자식 5개 + ResultUI 컴포넌트 + 7개 필드 리플렉션 할
+          +당). 폰트는 씬 내 기존 TMP 에서 `NotoSansKR-Black SDF` 자동 차
+          +용                                                            
+       36  
+       41 -### 1-3. 검증된 시퀀스                                        
+       37 +> 자세한 좌표·치수·수정 가이드는 **`README.md` §14-10** 참조. 
+       38  
+       43 -**Game.unity 단독 Play** — ScoreboardUI 3개 로그 시퀀스 그대로
+          -:                                                             
+       44 -```                                                           
+       45 -[Scoreboard] 초기화 완료 → 게임 초기화 → 프레임 1 시작        
+       46 -```                                                           
+       39 +### 1-3. 검증된 시퀀스 (2026-06-18 Play 모드)                 
+       40  
+       48 -**mainmenu.unity 경유 (양 모드 공통, 모드명만 다름)**:        
+       41  ```
+       50 -[MainMenu] 초기화 완료 → [ModeSelector] 모드 선택 → [MainMenu]
+          - 씬 전이 → Game                                               
+       51 -→ [Scoreboard] 초기화 완료 → [GameManager] ModeSelector 로부터
+          - 룰 주입                                                      
+       52 -→ [FrameManager] 초기화 완료 → [Scoreboard] 게임 초기화/프레임
+          - 1 시작                                                       
+       53 -→ [GameManager] BeginGame → AimingPosition                    
+       42 +[Scoreboard] 초기화 완료 → [Result] 초기화 완료 — FrameManager
+          + 이벤트 + 버튼 콜백 구독                                      
+       43 +→ [FrameManager] 초기화 완료 (모드: 쇼트 모드, 총 5프레임)    
+       44 +→ [Scoreboard] 게임 초기화 → [Result] 게임 초기화 — 패널 숨김 
+       45 +→ [Scoreboard] 프레임 1 시작 → [GameManager] BeginGame → Aimin
+          +gPosition                                                     
+       46  ```
+       47  
+       56 -### 1-4. 확인된 잔여 이슈                                     
+       57 -- **`FrameManagerTests`** 일부 케이스(`InvalidOperationExcepti
+          -on` 기대)가 실제 fail-safe 구현과 불일치 — 테스트 리팩토링 필 
+          -요. ResultUI 작업과는 독립.                                   
+       58 -- **폰트**: `NotoSansKR-Black SDF` 는 이미 weight 900 이라 `<b
+          ->` 가 시각적 효과 거의 없음. 강조 필요 시 색상/크기 태그 권장.
+       59 -- **`using System;`** (ScoreboardUI.cs / ResultUI.cs) 미사용 —
+          - 정리 후보 (ResultUI 단계 4 종료 시점에 판단).                
+       48 +**미검증 (다음 세션 수동):**                                  
+       49 +- 5프레임 완주 → `HandleGameOver` → 패널 표시 + 점수/스트라이 
+          +크/스페어 갱신                                                
+       50 +- `restart_button` 클릭 → `GameManager.RestartGame()` → 패널  
+          +숨김 + 게임 재시작                                            
+       51 +- `main_menu_button` 클릭 → `SceneManager.LoadScene("mainmenu"
+          +)` → 메인메뉴 복귀                                            
+       52  
+       53  ---
+       54  
+       63 -## 2. 다음 작업: ResultUI 구현                                
+       55 +## 2. 우선순위 1 — Build Settings / 씬 중복 정리 ⚠️           
+       56  
+       65 -### 2-1. 작업 동기                                            
+       66 -- README §6 Phase 6 의 "결과 화면" 항목 — Vertical Slice (M2, 
+          -2026-06-20, 약 4주) 도달을 위한 critical path.                
+       67 -- 현재 게임 종료 시 사용자는 자기 점수를 화면에서 확인할 수 없
+          -음 (콘솔 로그만 존재). 명백한 UX 갭.                          
+       57 +### 2-1. 문제 진단                                            
+       58  
+       69 -### 2-2. 사용자가 확정한 요구사항                             
+       70 -- **표시 내용** (3개 수치):                                   
+       71 -  - 최종 점수 (예: `58`)                                      
+       72 -  - 스트라이크 횟수 (예: `2회`)                               
+       73 -  - 스페어 처리 횟수 (예: `2회` — `Frame.IsSpare()` 기준이므로
+          - 0/10 스페어도 포함)                                          
+       74 -- **버튼** (2개):                                             
+       75 -  - 재시작 → `GameManager.Instance.RestartGame()`             
+       76 -  - 메인메뉴 → `SceneManager.LoadScene("mainmenu")`           
+       59 +세션 종료 시점 점검에서 발견:                                 
+       60  
+       78 -### 2-3. 컴포넌트 설계 (합의된 요지)                          
+       79 -                                                              
+       80 -| 항목 | 값 |                                                 
+       61 +| 항목 | 현재 상태 |                                          
+       62  |---|---|
+       82 -| 네임스페이스 | `BowlingGame` |                              
+       83 -| 어셈블리 | `Assembly-CSharp` |                              
+       84 -| 파일 경로 | `Assets/Scripts/UI/ResultUI.cs` |               
+       85 -| 로그 prefix | `[Result]` |                                  
+       86 -| 직렬화 필드 (7개) | `frameManager`(FrameManager), `panelRoot
+          -`(GameObject), `finalScoreText`/`strikeCountText`/`spareCountT
+          -ext`(TMP_Text), `restartButton`/`mainMenuButton`(Button) |    
+       87 -| 표시 상수 | `COUNT_FORMAT = "{0}회"`, `MAIN_MENU_SCENE_NAME 
+          -= "mainmenu"` |                                               
+       88 -| 헬퍼 (순수 함수) | `CountStrikes()`, `CountSpares()`, `Forma
+          -tCount(int)` |                                                
+       89 -| 사이드이펙트 헬퍼 | `ShowPanel()`, `HidePanel()` |          
+       90 -| 구독 이벤트 | `OnGameInitialized` → 숨김 / `OnGameOver` → 표
+          -시 + 3개 갱신 |                                               
+       91 -| 버튼 콜백 | `OnRestartClicked`, `OnMainMenuClicked` |       
+       63 +| `Assets/Game.unity` (루트) | **untracked 신규 파일** — 누군 
+          +가 씬을 루트로 복제 저장 |                                    
+       64 +| `Assets/Scenes/Game.unity` (canonical) | 정상. **본 세션 Res
+          +ultUI 배선이 들어간 곳** |                                    
+       65 +| `EditorBuildSettings.asset` | modified — index 1 이 `Assets/
+          +Game.unity` (루트) 를 가리킴 |                                
+       66  
+       93 -### 2-4. 5단계 점진 개발 계획                                 
+       67 +**증상**: 빌드 / `SceneManager.LoadScene("Game")` 호출 시 실제
+          +로 로드되는 씬은 `Assets/Game.unity` (루트) — ResultUI 가 없는
+          + 쪽. 본 세션 검증이 통과한 것은 Editor 의 Play 모드가 "현재 열
+          +려 있는 씬" 을 직접 재생했기 때문 (Build Settings 무관). mainm
+          +enu → Game 흐름에서는 ResultUI 가 보이지 않을 가능성 높음.    
+       68  
+       95 -| 단계 | 산출물 | 검증 | 상태 |                               
+       96 -|---|---|---|---|                                             
+       97 -| **1. 골격** | 클래스, using, 직렬화 필드 7개, 메서드 스텁 | 
+          -컴파일 통과 | ✅ 완료 (2026-06-06) |                          
+       98 -| **2. 구독/해제** | Start/OnDestroy/Validate. 이벤트 2개 구독
+          - + 버튼 2개 `onClick.AddListener` (해제도 대칭) | Play 시 `[Re
+          -sult] 초기화 완료` 로그 | ⏳ **착수 대기** |                  
+       99 -| **3. 상수/헬퍼** | 표시 상수 + `CountStrikes`/`CountSpares`/
+          -`FormatCount`/`ShowPanel`/`HidePanel` | 컴파일 통과 | ⏳ |    
+      100 -| **4. 핸들러+콜백** | `HandleGameInitialized`(숨김), `HandleG
+          -ameOver`(표시+갱신), `OnRestartClicked`, `OnMainMenuClicked` |
+          - Play 시작 시 패널 숨김 확인 | ⏳ |                           
+      101 -| **5. 씬 배선** | Canvas 하위 `ResultPanel` (TMP 3 + Button 2
+          - + 배경 Image), ResultUI 부착, 7개 필드 할당 | Play → 5프레임 
+          -완주 → 패널 표시 + 점수/스트라이크/스페어 확인 + 버튼 동작 |  
+          -⏳ |                                                          
+       69 +### 2-2. 복구 절차 (권장 — 옵션 A: canonical 위치 유지)       
+       70  
+      103 -각 단계는 한 메시지 안에서 완결.                              
+       71 +1. Editor 에서 `Assets/Scenes/Game.unity` 열린 상태 유지      
+       72 +2. Project 창에서 `Assets/Game.unity` 및 `Assets/Game.unity.me
+          +ta` 우클릭 → Delete                                           
+       73 +3. File > Build Settings 열기 → Scenes In Build 에 `Assets/Sce
+          +nes/Game.unity` 추가 (drag-drop, index 1 위치)                
+       74 +4. 기존 `Assets/Game.unity` 항목 (deleted, 빨간 표시) 제거    
+       75 +5. Build Settings 닫고 `Ctrl+S` 로 씬 저장 + `Assets > Save Pr
+          +oject`                                                        
+       76 +6. `git add EditorBuildSettings.asset Assets/Scenes/Game.unity
+          +.meta` + 커밋                                                 
+       77  
+      105 -> Build Settings 의 `mainmenu` 등록은 메인메뉴 작업에서 이미  
+          -완료됨 — 단계 5 사전 점검에서 제거 가능.                      
+       78 +### 2-3. 검증                                                 
+       79  
+      107 ----                                                           
+       80 +- mainmenu → 쇼트 버튼 → Game 씬 진입 → **`[Result] 초기화 완 
+          +료` 로그가 떠야 정상** (이전엔 ResultUI 없는 씬이라 로그 없음)
+       81 +- 5프레임 완주 → ResultPanel 표시 확인                        
+       82  
+      109 -## 3. 현재 위치: 단계 2 (구독/해제 + Validate) 착수 대기      
+       83 +### 2-4. 대안 (옵션 B — 루트 위치 인정)                       
+       84  
+      111 -단계 1 (골격) 완료. 다음은 ScoreboardUI 의 단계 2 패턴 답습.  
+       85 +`Assets/Game.unity` 가 더 최신이라면 `Assets/Scenes/Game.unity
+          +` 를 폐기하고 루트를 표준 위치로 인정. 단 `.meta` GUID 충돌 가
+          +능성과 README §14-3 (canonical 경로 명시) 갱신 부담이 있어 비 
+          +권장.                                                         
+       86  
+      113 -### 3-1. 단계 2 추천 골자 (사용자 확정 후 클로드가 그대로 작성
+          -)                                                             
+       87 +---                                                           
+       88  
+      115 -**Start():**                                                  
+      116 -```csharp                                                     
+      117 -private void Start()                                          
+      118 -{                                                             
+      119 -    if (!Validate()) { enabled = false; return; }             
+       89 +## 3. 우선순위 2 — ResultUI end-to-end 수동 검증              
+       90  
+      121 -    frameManager.OnGameInitialized += HandleGameInitialized;  
+      122 -    frameManager.OnGameOver        += HandleGameOver;         
+       91 +### 3-1. 시나리오                                             
+       92  
+      124 -    restartButton.onClick.AddListener(OnRestartClicked);      
+      125 -    mainMenuButton.onClick.AddListener(OnMainMenuClicked);    
+       93 +mainmenu 에서 시작 → 쇼트 모드 → 5프레임 완주 (스트라이크 1회 
+          ++ 스페어 1회 포함) → 다음 모두 확인:                          
+       94  
+      127 -    // 초기 상태: 패널 숨김 (HidePanel 은 단계 3 에서 추가 —  
+          -단계 2 에선 panelRoot.SetActive(false) 직접 호출)             
+      128 -    panelRoot.SetActive(false);                               
+       95 +| 확인 항목 | 기대 결과 |                                     
+       96 +|---|---|                                                     
+       97 +| 콘솔에 `[Result] 게임 종료 — 패널 표시 (점수 N, 스트라이크 M
+          +회, 스페어 K회)` 로그 출력 | ✓ |                              
+       98 +| Canvas 중앙에 검은 반투명 `ResultPanel` 표시 | ✓ |          
+       99 +| `final_score` 에 정확한 최종 점수 (예: `58`) | ✓ |          
+      100 +| `strike_count` 에 `"N회"` 형식 (예: `"1회"`) | ✓ |          
+      101 +| `spare_count` 에 `"M회"` 형식 (0/10 스페어도 카운트됨) | ✓ |
+      102 +| `restart_button` 클릭 → 패널 숨김 + 1프레임 재시작 + `[Resul
+          +t] 게임 초기화 — 패널 숨김` 로그 | ✓ |                        
+      103 +| `main_menu_button` 클릭 → mainmenu 씬 로드 + Canvas 자체 사 
+          +라짐 | ✓ |                                                    
+      104  
+      130 -    Debug.Log("[Result] 초기화 완료 — FrameManager 이벤트 + 버
+          -튼 콜백 구독");                                               
+      131 -}                                                             
+      132 -```                                                           
+      105 +### 3-2. 발견될 가능성 높은 이슈 후보                         
+      106  
+      134 -**OnDestroy():**                                              
+      135 -```csharp                                                     
+      136 -private void OnDestroy()                                      
+      137 -{                                                             
+      138 -    if (frameManager != null)                                 
+      139 -    {                                                         
+      140 -        frameManager.OnGameInitialized -= HandleGameInitialize
+          -d;                                                            
+      141 -        frameManager.OnGameOver        -= HandleGameOver;     
+      142 -    }                                                         
+      143 -    if (restartButton  != null) restartButton.onClick.RemoveLi
+          -stener(OnRestartClicked);                                     
+      144 -    if (mainMenuButton != null) mainMenuButton.onClick.RemoveL
+          -istener(OnMainMenuClicked);                                   
+      145 -}                                                             
+      146 -```                                                           
+      107 +- `strike_count` / `spare_count` 의 텍스트가 `FormatCount` 결 
+          +과로 덮어쓰여 **"스트라이크" / "스페어" 라벨이 사라짐**. READM
+          +E §14-10-4 참고 — 라벨 영구 표시하려면 `COUNT_FORMAT` 을 `"스 
+          +트라이크 {0}회"` 로 바꾸거나 별도 라벨 노드 추가              
+      108 +- ScoreboardUI 의 `gameover_score` 가 ResultPanel 뒤에서 동시 
+          +표시될 수 있음 — UX 결정 필요 (배경 불투명화, gameover_score  
+          +숨김, 또는 ResultPanel 안으로 통합)                           
+      109 +- 버튼 hover/pressed 상태 시각 피드백이 없음 — Button.colors  
+          +기본값만 적용된 상태. 필요 시 Inspector 에서 Highlighted/Press
+          +ed 색 조정                                                    
+      110  
+      148 -**Validate():** ScoreboardUI 와 동일 패턴 — 7개 필드 각각 null
+          - 체크 + `[Result]` prefix 에러 로그.                          
+      111 +---                                                           
+      112  
+      150 -### 3-2. 단계 2 의사결정 후보                                 
+      151 -- **A. `panelRoot.SetActive(false)` 를 Start 에서 직접 호출할 
+          -지, 단계 3 의 `HidePanel()` 헬퍼로 미룰지** — 클로드 추천: 단 
+          -계 2 에선 직접 호출, 단계 3 에서 헬퍼로 리팩토링.             
+      152 -- **B. `[Result] 초기화 완료` 로그 메시지 문구** — ScoreboardU
+          -I 패턴 답습.                                                  
+      113 +## 4. 우선순위 3 — JSON SaveSystem (Phase 8)                  
+      114  
+      154 -### 3-3. 단계 2 검증                                          
+      155 -- Play (mainmenu) → 쇼트 또는 풀 버튼 클릭 → Game 씬 진입 → 콘
+          -솔에 `[Result] 초기화 완료 — ...` 로그 확인.                  
+      156 -- ResultUI 가 부착될 GameObject 는 단계 5 에서 결정 — 단계 2~4
+          - 동안은 Game.unity 의 Canvas 에 임시 부착하거나 단순히 컴파일 
+          -만 검증.                                                      
+      115 +### 4-1. 작업 윤곽 (2026-06-05 검토 시 정의됨)                
+      116  
+      158 ----                                                           
+      117 +- `SaveSystem` (static): `Save(SaveData)` / `Load() → SaveData
+          +` + 파일 I/O + 예외 처리                                      
+      118 +- `HighScoreService`: `GameRecord` 생성·정렬·상위 N개 유지·중 
+          +복 정책                                                       
+      119 +- `GameManager.OnEnterGameOver` 에서 `HighScoreService.Record(
+          +...)` 호출 연동                                               
+      120 +- 저장 경로: `Application.persistentDataPath/save.json`       
+      121 +- 직렬화: JsonUtility (1순위) 또는 Newtonsoft.Json (확장 시 검
+          +토)                                                           
+      122  
+      160 -## 4. 단계 1 시 합의된 결정사항 (단계 2 이후에도 유지)        
+      123 +### 4-2. 사용자 결정 필요한 8개 항목                          
+      124  
+      162 -| 항목 | 결정 |                                               
+      163 -|---|---|                                                     
+      164 -| A. `panelRoot` 분리 | ✅ 분리. 본 컴포넌트는 Canvas 같은 항 
+          -상 활성 오브젝트에 부착 |                                     
+      165 -| B. GameManager 참조 방식 | ✅ 싱글톤 (`GameManager.Instance.
+          -RestartGame()`). 직렬화 필드 추가 안 함 |                     
+      166 -| C. `using System;` | 단계 1 에서는 둠. 단계 4 종료 후 미사용
+          -이면 제거 |                                                   
+      167 -| D. 명명 컨벤션 | Header 그룹, TMP `~Text`, Button `~Button` 
+          -접미사, 핸들러 `Handle~` / 버튼 `On~Clicked` |                
+      168 -| E. 씬 노드 이름 | snake_case: `final_score`, `strike_count`,
+          - `spare_count`, `restart_button`, `main_menu_button`, `ResultP
+          -anel` |                                                       
+      125 +1. **직렬화 라이브러리** — JsonUtility (기본, 단순) vs Newtons
+          +oft.Json (이미 패키지 설치됨, 유연)                           
+      126 +2. **저장 시점** — `HandleGameOver` 직후 즉시 vs `OnRestartCli
+          +cked`/`OnMainMenuClicked` 시점에 묶어서                       
+      127 +3. **highScores 상한** — Top 5 / Top 10 / 무제한              
+      128 +4. **정렬 정책** — 점수 내림차순 (동점 시 날짜 최신순)        
+      129 +5. **첫 실행 처리** — 파일 없을 때 빈 `SaveData` 반환 vs `null
+          +` 후 호출자 책임                                              
+      130 +6. **저장 실패 정책** — 로그만 vs 사용자 알림 vs 백업         
+      131 +7. **백업·복구** — `.json.bak` 회전 vs 단일 파일              
+      132 +8. **세이브 데이터 버전 관리** — `version: 1` 필드 추가 vs 미 
+          +정                                                            
+      133  
+      170 -권장 씬 구조 (단계 5 작업):                                   
+      171 -```                                                           
+      172 -Canvas (ResultUI 부착)                                        
+      173 -└── ResultPanel (= panelRoot)                                 
+      174 -    ├── final_score                                           
+      175 -    ├── strike_count                                          
+      176 -    ├── spare_count                                           
+      177 -    ├── restart_button                                        
+      178 -    └── main_menu_button                                      
+      179 -```                                                           
+      134 +### 4-3. 영향 받을 기존 파일                                  
+      135  
+      136 +- `Assets/Scripts/Persistence/SaveData.cs` (스켈레톤만 존재)  
+      137 +- `Assets/Scripts/Persistence/GameRecord.cs` (스켈레톤만 존재)
+      138 +- 신규: `Assets/Scripts/Persistence/SaveSystem.cs`, `Assets/Sc
+          +ripts/Persistence/HighScoreService.cs`                        
+      139 +- `Assets/Scripts/Core/GameManager.cs` — `OnEnterGameOver` 또 
+          +는 별도 후크에 `HighScoreService.Record(...)` 추가            
+      140 +- (선택) `Assets/Scripts/UI/ResultUI.cs` — "베스트 스코어 갱신
+          +!" 강조 표시 시 `HighScoreService` 조회 후 비교               
+      141 +                                                              
+      142  ---
+      143  
+      183 -## 5. 사전 점검 (단계 5 직전 확인)                            
+      144 +## 5. 우선순위 4 — 후속 후보                                  
+      145  
+      185 -- ~~Build Settings 에 `mainmenu` 등록~~ — ✅ **이미 완료** (메
+          -인메뉴 작업 F 단계에서 mainmenu=index 0, Game=index 1 등록).  
+      186 -- `mainmenu.unity` 내부 상태 — ✅ MainMenuUI / GameModeSelecto
+          -r / 2개 버튼 모두 구성 완료. ResultUI 의 "메인메뉴" 버튼이 `Sc
+          -eneManager.LoadScene("mainmenu")` 호출 시 실제 동작 검증 가능.
+      146 +| 항목 | 비고 |                                               
+      147 +|---|---|                                                     
+      148 +| 6-b 10프레임 동적 점수판 | README §6/§10 의 "프레임 수에 따 
+          +라 동적 생성". 풀 모드 시 점수판 5칸 → 10칸 동적 확장 |       
+      149 +| 6-e 튜토리얼 화면 | 형식 미결정 (정적 이미지 vs 인터랙티브) 
+          +|                                                             
+      150 +| `FrameManagerTests` 리팩토링 | 예외 기대 케이스 → 새 fail-sa
+          +fe 명세 (`Debug.LogWarning + 무시`) 와 정렬 |                 
+      151 +| 결과 화면 확장 | "퍼펙트!" 강조, 별/이펙트, 베스트 스코어 비
+          +교 (SaveSystem 의존) |                                        
+      152 +| 접근성 옵션 (M4, 2026-07-31) | TTS, 색각 모드, 자동 보정, 키
+          + 리바인딩, 깜빡임 제거 |                                      
+      153  
+      154  ---
+      155  
+      156  ## 6. 다음 세션 재개 절차
+      157  
+      192 -### 6-1. 빠른 재개 (단계 2 바로 진입)                         
+      158 +### 6-1. 빠른 재개                                            
+      159 +                                                              
+      160  ```
+      194 -ResultUI 단계 2 진행해줘.                                     
+      195 -의사결정 A,B 클로드 추천안 그대로 ✅                          
+      161 +Build Settings 정리부터 진행해줘.                             
+      162 +README §14-10-6 절차 그대로 ✅                                
+      163  ```
+      164  
+      165  ### 6-2. 일반 재개
+      199 -사용자가 "ResultUI 작업 재개" 라고만 말하면 클로드가:         
+      200 -1. 본 문서를 다시 읽어 컨텍스트 복원                          
+      201 -2. 단계 2 추천안을 다시 제시 (§3 내용)                        
+      202 -3. 사용자 확정 대기                                           
+      166  
+      167 +사용자가 "다음 작업 재개" 라고만 말하면 클로드가:             
+      168 +1. `README.md` §14-6 (우선순위 목록) + §14-10-6 (Build Setting
+          +s 진단) 다시 읽어 컨텍스트 복원                               
+      169 +2. 우선순위 1 (Build Settings) 부터 안내. 사용자 결정 (옵션 A/
+          +B) 후 진행                                                    
+      170 +3. 우선순위 2 (수동 검증) → 3 (JSON SaveSystem) 순차 진행     
+      171 +                                                              
+      172  ### 6-3. 진행 방식 변경 시
+      205 -사용자가 "단계 2~5 한 번에 다 작성" 또는 "자동 진행" 등을 요청
+          -하면 그에 맞춰 페이스 조정.                                   
+      173  
+      174 +JSON SaveSystem 을 먼저 하고 싶으면 사용자가 명시. 단 Build Se
+          +ttings 미해결 상태에서 SaveSystem 작업은 의미가 약함 — Game 씬
+          + 정상 진입 + GameOver 시점 확정 후 진행하는 것이 자연스러움.  
+      175 +                                                              
+      176  ---
+      177  
+      209 -## 7. ResultUI 완료 이후 후보 (별도 합의 필요)                
+      178 +## 7. 절대 잊지 말 것 (재개 시 첫 5분 체크리스트)             
+      179  
+      211 -플랜에 명시된 후속 작업 (우선순위 미정):                      
+      180 +- [ ] `AI_PROMPT_REFERENCE.md` §6 (혼동 위험 이름) 재확인 — 특
+          +히 `FrameManager` 가 `Bowling.Scoring` 네임스페이스에 있다는  
+          +사실                                                          
+      181 +- [ ] `AI_PROMPT_REFERENCE.md` §7 (절대 건드리지 말 것) 14개  
+          +항목 재확인 — 특히 "UI 표시 규칙은 UI 클래스 내부 상수에만 둘 
+          +것", "GameManager.Start() ModeSelector 폴백 분기 제거 금지"   
+      182 +- [ ] Build Settings 가 정리되기 전까지는 **반드시 Editor 에서
+          + `Assets/Scenes/Game.unity` 를 열어둔 상태로 Play** — 아니면 R
+          +esultUI 가 안 보임                                            
+      183 +- [ ] `GameManager` GameObject 두 개 중 **ⓑ (FrameManager 보유
+          +, instanceID 49714)** 쪽에 `frameManager` 가 와이어링되어 있음
+          + — 옮기지 말 것                                               
+      184 +- [ ] 폰트 `NotoSansKR-Black SDF` 의 `<b>` 무효 이슈 — 시각 강
+          +조 필요 시 색상/크기 태그 사용                                
+      185  
+      213 -1. **결과 화면 확장**: "퍼펙트!" 강조, 별/이펙트, 베스트 스코 
+          -어 비교                                                       
+      214 -2. ~~메인 메뉴 흐름: `mainmenu.unity` ↔ `Game.unity` 씬 전이 +
+          - 모드 선택 UI~~ — ✅ **완료 (2026-06-06)**                    
+      215 -3. ~~`FullModeRule.asset` 생성: 10프레임 모드 활성화~~ — ✅ **
+          -완료 (2026-06-06)**                                           
+      216 -4. **10프레임 동적 점수판**: README §6/§10 의 "프레임 수에 따 
+          -라 동적 생성" 항목                                            
+      217 -5. **튜토리얼 화면**: 형식 미결정 (정적 이미지 / 인터랙티브)  
+      218 -6. **JSON SaveSystem** (Phase 8)                              
+      219 -7. **FrameManagerTests 리팩토링** (예외 기대 → fail-safe 명세 
+          -정렬)                                                         
+      220 -8. **접근성 옵션** (M4, 2026-07-31 목표) — TTS, 색각 모드, 자 
+          -동 보정, 키 리바인딩, 깜빡임 제거                             
+      221 -                                                              
+      186  ---
+      187  
+      224 -## 8. 절대 잊지 말 것 (재개 시 첫 5분 체크리스트)             
+      188 +## 8. 본 세션에서 변경된 파일 (commit 후보)                   
+      189  
+      226 -- [ ] `AI_PROMPT_REFERENCE.md` §6 (혼동 위험 이름) 재확인 — 특
+          -히 `FrameManager` 가 `Bowling.Scoring` 네임스페이스에 있다는  
+          -사실                                                          
+      227 -- [ ] `AI_PROMPT_REFERENCE.md` §7 (절대 건드리지 말 것) 14개  
+          -항목 재확인 — 특히 "UI 표시 규칙은 UI 클래스 내부 상수에만 둘 
+          -것", "GameManager.Start() ModeSelector 폴백 분기 제거 금지"   
+      228 -- [ ] `ScoreboardUI.cs` 의 4단계 패턴 → ResultUI 도 동일 답습 
+      229 -- [ ] `GameManager` GameObject 두 개 중 **ⓑ (FrameManager 보유
+          -)** 쪽에 `frameManager` 인스펙터 연결                         
+      230 -- [ ] 폰트 `NotoSansKR-Black SDF` 의 `<b>` 무효 이슈 — ResultU
+          -I 의 시각 강조 필요 시 색상/크기 태그 사용                    
+      231 -- [ ] 메인메뉴 경유로 게임에 진입할 때 `[GameManager] ModeSele
+          -ctor 로부터 룰 주입: ...` 로그가 떠야 정상 (AI_PROMPT_REFERENC
+          -E.md §12-2)                                                   
+      190 +- `Assets/Scripts/UI/ResultUI.cs` — 단계 2~4 본문 추가 (구독· 
+          +헬퍼·핸들러·콜백)                                             
+      191 +- `Assets/Scenes/Game.unity` — Canvas 에 ResultUI + ResultPane
+          +l 트리 (자식 5개) 추가                                        
+      192 +- `Assets/Scenes/Game.unity.meta` — Unity 자동 갱신           
+      193 +- `README.md` — §14 전반 갱신 (특히 §14-10 신설)              
+      194 +- `NEXT_SESSION.md` — 본 파일 (2026-06-18 우선순위 재정의)    
+      195  
+      196 +`Assets/Game.unity` (루트, untracked) 와 `EditorBuildSettings.
+          +asset` (modified) 는 **본 세션의 변경이 아님** — 이전 세션 잔 
+          +여물. 우선순위 1 작업 후 함께 정리 권장.                      
+      197 +                                                              
+      198  ---
+      199  
+      235 -*이 문서는 ResultUI 작업이 완료되거나, 다음 작업이 결정되면 갱
+          -신/대체된다.*                                                 
+      200 +*이 문서는 우선순위 1 (Build Settings 복구) 가 완료되면 갱신되
+          +며, 우선순위 3 (JSON SaveSystem) 작업 시점에 다시 재구성된다.*
+      201  
+      237 -*최종 갱신: 2026-06-07 (단계 1 완료 + 메인메뉴 작업 완료 반영,
+          - 단계 2 진입 가이드로 전환)*                                  
+      202 +*최종 갱신: 2026-06-18 (ResultUI 단계 2~5 완료 + Build Setting
+          +s 정리 가이드 + JSON SaveSystem 사전 검토)*                   
+
+● 단계 5 + 문서화 완료. 요약:
+
+  본 세션 결과
+
+  완료된 작업:
+  1. ✅ ResultUI 단계 2~5 전체 완료 (Assets/Scripts/UI/ResultUI.cs +
+  Assets/Scenes/Game.unity Canvas 배선)
+  2. ✅ 씬 배선 자동화 — mcp__UnityMCP__execute_code 로 ResultPanel + 자식 5개
+  (final_score, strike_count, spare_count, restart_button, main_menu_button)
+  생성, ResultUI 컴포넌트 부착, 7개 SerializeField 리플렉션 와이어링
+  3. ✅ 폰트 자동 적용 — 씬 내 기존 TMP 에서 NotoSansKR-Black SDF 차용
+  4. ✅ 정적 검증 — Play 모드 [Result] 초기화 완료 + [Result] 게임 초기화 — 패널
+   숨김 로그 통과, 에러 0
+  5. ✅ README.md §14 갱신 — 6-c 상태 ✅, §14-10 신설 (좌표·치수·수정 가이드 6개
+   절), §14-11 renumber
+  6. ✅ NEXT_SESSION.md 전면 재작성 — 다음 우선순위 1~4 정의
+
+  주요 좌표/치수 (Canvas 기준, anchor center):
+  - ResultPanel: (0,0) size (900,700) 검은 알파 0.85
+  - final_score: (0, 200) size (800,160) fontSize 140
+  - strike_count: (0, 40) / spare_count: (0, -40) fontSize 48
+  - restart_button: (-180, -200) / main_menu_button: (180, -200) size (320,110)
+
+  ⚠️ 발견된 미해결 이슈 (M2 차단 가능)
+
+  Assets/Game.unity (루트 — untracked 신규 파일) 와 Assets/Scenes/Game.unity
+  (canonical, 이번 ResultUI 배선이 들어간 곳) 가 양쪽 존재. Build Settings index
+   1 은 루트 Assets/Game.unity 를 가리키고 있어 mainmenu → Game 흐름에서는 
+  ResultUI 가 안 보일 가능성 높음. 본 세션 검증이 통과한 건 Editor 가 "현재 열린
+   씬" (canonical) 을 직접 재생했기 때문 — 빌드 / 정상 흐름 검증은 안 됨.
+
+  복구 절차는 README.md §14-10-6 과 NEXT_SESSION.md §2-2 에 단계별 명시. 다음
+  세션 첫 작업으로 권장.
+
+  수정 편의를 위해 정리된 내용
+
+  README.md §14-10 에 "자주 하게 될 수정 작업 — 빠른 레시피" 표 (§14-10-4) 가
+  있어, 패널 위치/색/버튼 색/라벨 텍스트/폰트 변경 등 각 경우에 어느 필드를
+  만져야 하는지 1:1 매핑되어 있습니다. 또 §14-10-5 에 자동화 스크립트 재실행
+  (멱등 — 기존 ResultPanel 자동 삭제 후 재생성) 가이드도 포함.
+
+✻ Churned for 9m 24s
+
+※ recap: Goal: ship ResultUI for the M2 bowling milestone. Just finished wiring ResultPanel into Canvas and updating docs; next is fixing the Build Settings mismatch where index 1 points to a duplicate Assets/Game.unity instead of the canonical Assets/Scenes/Game.unity.
+
+> 지금 게속해서 플레이 모드에서 '쇼트모드','풀모드' 관계없이 두개의 모드 다     
+  볼링 공을 굴린 뒤 볼링 공의 위치가 초기화될 때 위치 초기화가 정확한 위치에    
+  되지 않을 때가 간혹가다 있습니다. 왜 그럴지 가설을 세우고 어떻게 하면 해당    
+  버그를 고칠 수 있을지 해결 방안을 제시 해주세요                               
+
+● 코드부터 정밀 분석합니다. 기존에 6단계 ResetBall + 3단계 방어가 있으니 그
+  너머의 원인을 찾아야 합니다.
+  Read 4 files (ctrl+o to expand)
+
+● 코드를 추적해 보니 호출 체인 안에 숨어 있던 두 가지 미세한 race 가 보입니다.
+  이전 6단계 ResetBall + 3단계 방어가 막은 건 "공이 바닥을 관통"하는
+  catastrophic 케이스고, 지금 남은 "간혹 위치가 살짝 어긋남" 은 다른 원인일
+  가능성이 높습니다.
+
+  호출 체인 정리
+
+  PhysicsSettleDetector.OnSettled      ← Update 페이즈
+    → ThrowTransitionController.HandlePostThrow
+        → ball.ResetToStartPosition()  ← 여기서 동기 검증 통과
+        → pinManager.RemoveFallenPins / ResetAllPins
+    → GameManager → state: Scoring → AimingPosition
+        → BallAimer.HandleStateChanged(next=AimingPosition)
+            → rb.isKinematic = true      ← ⚠️ ResetBall 직후 다시 kinematic
+  다음 프레임 Update:
+    → BallAimer.Update
+        → transform.position = new Vector3(x, transform.position.y, 0.5f)
+                                                ↑                   ↑
+                                                Y 그대로 차용         Z 강제
+  0.5f
+
+  가설 (가능성 순)
+
+  가설 1 — BallAimer.Update 가 Y/Z 를 덮어쓰면서 spawnPoint 와 어긋남 (가장 
+  유력)
+
+  BallAimer.cs:36 의 한 줄:
+  transform.position = new Vector3(x, transform.position.y, ballStartZ);
+
+  - Z 는 ballStartZ = 0.5f 로 강제 고정 (인스펙터 값)
+  - Y 는 transform.position.y 차용 — 즉, "그 순간 transform 의 Y"
+
+  ResetToStartPosition 의 내부 검증은 ResetBall 직후 동기적으로 통과합니다.
+  하지만 그 검증이 통과한 다음 프레임 Update 에서 BallAimer 가 Y/Z 를 위 코드로
+  다시 씁니다.
+
+  문제: 만약 spawnPoint.position.z ≠ 0.5f 이면 매 리셋마다 항상 Z 가 0.5 로
+  스냅됩니다 — "정확한 위치" 와 다른 위치로 가는 결정적 원인. 또
+  spawnPoint.position.y 와 ballStartZ 가 인스펙터에서 다르게 설정돼 있으면 매번
+  같은 양만큼 어긋남. "간혹가다" 라기보다 "항상 어긋난다" 에 가깝지만, 사용자가
+  미세한 어긋남을 매번 인지하지 못해 "간혹" 으로 느낄 수 있음.
+
+  검증 방법: spawnPoint 의 Transform 값과 BallAimer.ballStartZ 인스펙터 값을
+  비교. 또 한 번의 리셋 직후 콘솔에서 transform.position 과 spawnPoint.position
+  을 찍어 비교.
+
+  가설 2 — Interpolation buffer 잔존 → 시각상 1~2 프레임 글라이드
+
+  Rigidbody Interpolation 이 Interpolate 또는 Extrapolate 면, 매 visual frame 의
+   transform 은 [이전 물리 step 위치, 현재 물리 step 위치] 사이를 보간한 값.
+  ResetBall 의 6단계 (kinematic→transform 세팅→SyncTransforms→Sleep→dynamic) 가
+  rb.position 을 정렬하더라도 interpolation 의 previousPosition 캐시까지 비우진 
+  않습니다. 결과: 리셋 직후 첫 1~2 프레임 동안 transform 이 "이전 종착점(레인
+  끝)" 에서 "spawnPoint" 로 시각상 슬라이드. 이 프레임 중에 BallAimer.Update 가
+  발동되면 가설 1 에 의해 Y 가 중간값으로 락됩니다.
+
+  검증 방법: BowlingBall 의 Rigidbody Interpolation 을 잠시 None 으로 바꿔
+  테스트. 어긋남이 사라지면 이 가설이 주범.
+
+  가설 3 — Catch-up FixedUpdate 가 ResetBall 의 isKinematic = false 와 BallAimer
+   의 isKinematic = true 사이 윈도우에 끼어듦
+
+  핀 충돌로 무거운 물리가 누적되면 Unity 가 frame catch-up 으로 한 Update 안에
+  여러 FixedUpdate 를 몰아 실행합니다. ResetBall 마지막에 rb.isKinematic = false
+   로 되돌리는데, 그 직후 BallAimer 가 다시 true 로 토글하기 전에 FixedUpdate 가
+   1회라도 끼어들면 중력이 한 틱 적용되어 Y 가 살짝 떨어짐. 검증 라인
+  (ValidateResetPosition) 은 ResetBall 내부에서 동기로 통과한 직후이므로 이
+  떨어짐을 못 잡습니다.
+
+  검증 방법: ResetBall 직후 → BallAimer Aim 시작 직후 양 시점에서
+  transform.position 을 로그. Y 가 후자에서 미세하게 작으면 (예: 0.15 → 0.149)
+  이 가설이 맞음.
+
+  가설 4 — spawnPoint 의 부모 변화 / 씬 중복
+
+  오늘 발견한 Assets/Game.unity vs Assets/Scenes/Game.unity 중복 (§14-10-6). 두
+  씬에서 BallSpawnPoint 의 위치/parent 가 다르면, 어떤 씬이 활성인지에 따라
+  다르게 동작. Build 흐름과 Editor 흐름이 다른 씬을 로드하니 "쇼트/풀 무관" 인데
+   "간혹" 인 것과 일치. 다만 사용자는 Editor Play 모드에서 본 거라 양쪽 씬을 다
+  본 게 아니라면 이 가설은 약함.
+
+  가설 5 — BallAimer.HandleStateChanged 가 prev=Scoring 일 때 linearVelocity = 0
+   만 호출, angular 미처리
+
+  BallAimer.cs:48:
+  if (rb != null) { rb.linearVelocity = Vector3.zero; rb.isKinematic = true; }
+
+  angularVelocity 는 클리어 안 함. ResetBall 에서 angularVelocity 를 이미 0 으로
+   만들었으니 보통 문제 없지만, 가설 3 의 catch-up 한 틱에서 핀과의 잔여 접촉이
+  회전을 누적시키면 회전 → 위치 미세 변화 (구르며 살짝 이동) 의 시드가 됩니다.
+  우선순위는 낮음.
+
+  권장 해결 방안 (영향도 순)
+
+  A. BallAimer 가 spawnPoint 의 Y/Z 를 그대로 차용 (1줄 수정, 가설 1 직격)
+
+  // 인스펙터에 spawnPoint Transform 추가 (또는 GameObject.Find 캐싱)
+  // Update 의 한 줄:
+  transform.position = new Vector3(x, spawnPoint.position.y,
+  spawnPoint.position.z);
+
+  또는 더 안전하게, AimingPosition 진입 시점에 한 번 스냅:
+  if (next == GameState.AimingPosition)
+  {
+      transform.position = spawnPoint.position;  // canonical 위치로 강제 스냅
+      isAiming = true;
+      pingPongTime = 0f;
+      // ...
+  }
+
+  → ballStartZ 인스펙터 필드는 제거 가능 (단일 출처 원칙).
+
+  B. ResetBall 에 rb.position 직접 세팅 + interpolation 임시 해제 (가설 2 직격)
+
+  public void ResetBall(Vector3 position)
+  {
+      var savedInterp = rb.interpolation;
+      rb.interpolation = RigidbodyInterpolation.None;   // 보간 버퍼 잠시 무력화
+
+      if (!rb.isKinematic) { rb.linearVelocity = Vector3.zero;
+  rb.angularVelocity = Vector3.zero; }
+      rb.isKinematic = true;
+
+      // transform + rb.position 양쪽 모두 세팅
+      transform.position = position;
+      transform.rotation = Quaternion.identity;
+      rb.position = position;
+      rb.rotation = Quaternion.identity;
+
+      Physics.SyncTransforms();
+      rb.Sleep();
+      rb.isKinematic = false;
+
+      Physics.SyncTransforms();        // 두 번째 sync (가설 3 mitigation)
+
+      rb.interpolation = savedInterp;  // 복구
+      hasLaunched = false;
+  }
+
+  C. ResetBall 후 BallAimer 가 곧바로 isKinematic 을 토글하지 않게 — ResetBall 
+  이 끝났을 때 이미 kinematic 으로 종료
+
+  가장 깔끔한 구조 변경 — ResetBall 마지막을 isKinematic = false 가 아니라
+  그대로 kinematic 유지. 그러면 BallAimer 가 isKinematic 을 또 토글할 일도 없고,
+   가설 3 의 catch-up 윈도우도 사라집니다. Rolling 진입 시 ExecuteLaunch 에서
+  isKinematic = false 로 명시 전환.
+
+  // ResetBall 끝부분
+  rb.Sleep();
+  // rb.isKinematic = false;   ← 제거
+  hasLaunched = false;
+
+  // ExecuteLaunch
+  private void ExecuteLaunch()
+  {
+      if (hasLaunched) return;
+      hasLaunched = true;
+      if (rb.isKinematic) rb.isKinematic = false;   // 명시 전환
+      // ...
+  }
+
+  D. 진단 로그 추가 (먼저 가설 확정)
+
+  수정 전에 어느 가설이 맞는지 가리려면 — 한 번의 리셋 후 4개 시점의
+  transform.position 을 한 줄씩 로그:
+
+  Debug.Log($"[Reset Diag] step0={ballPos_before_reset}
+  target={spawnPoint.position}");
+  // ResetBall 실행
+  Debug.Log($"[Reset Diag] step1_postReset={transform.position}
+  rb={rb.position}");
+  // 다음 FixedUpdate 종료 후 (코루틴):
+  // yield return new WaitForFixedUpdate();
+  Debug.Log($"[Reset Diag] step2_postFixed={transform.position}");
+  // BallAimer 첫 Update 후:
+  Debug.Log($"[Reset Diag] step3_aimFirst={transform.position}");
+
+  step1↔step2 사이에 Y 가 떨어지면 가설 3, step2↔step3 사이에 Y/Z 가 바뀌면 가설
+   1, step1 의 transform↔rb 가 다르면 가설 2.
+
+  추천 실행 순서
+
+  1. 먼저 D (진단 로그) 를 10~20 회 반복 리셋하며 수집 — 어느 step 사이에서
+  어긋남이 발생하는지 정확히 식별.
+  2. 가설 1 (Z=0.5 스냅) 이 확인되면 A 1줄 수정으로 즉시 해결 가능.
+  3. 그래도 남으면 B (interpolation 임시 해제 + 2nd SyncTransforms).
+  4. 구조적으로 깔끔하게 가려면 C (kinematic 유지 모드) — 단 ExecuteLaunch 의
+  다른 호출 경로도 함께 검토 필요.
+
+  진단부터 시작할까요, 아니면 가설 1 (Z 스냅 vs spawnPoint) 가 매우 유력해
+  보이니 A 부터 1줄 수정 후 재현 시도해 볼까요?
+
+✻ Crunched for 4m 0s
+
+※ recap: ResultUI 단계 2~5 완료하고 Game.unity Canvas에 ResultPanel 배선·검증·문서화 끝냈습니다. 지금은 공 리셋 위치 미세 어긋남 버그 분석 중이고, 다음으로 BallAimer Update의 Z=0.5 강제 스냅을 spawnPoint 기준으로 1줄 수정할지 결정하면 됩니다.
+
+> 일단 가설1로 A 1줄 수정을 먼저 해주세요 검증은 제가 하겠습니다.               
+
+● 가설 1 직격으로 BallAimer 가 spawnPoint 의 Y/Z 를 차용하도록 수정합니다.
+  BowlingBall.cs:29-36 의 캐싱 패턴을 그대로 답습 — Awake 1회 캐싱 + Update 1줄
+  변경.
+
+● Update(Assets\Scripts\Gameplay\BallAimer.cs)
+  ⎿  Added 15 lines, removed 2 lines
+       6      {
+       7          [SerializeField] float laneHalfWidth = 0.43f;
+       8          [SerializeField] float oscSpeed = 1.2f;
+       9 -        [SerializeField] float ballStartZ = 0.5f;              
+       9 +        [SerializeField, Tooltip("BallSpawnPoint 미발견 시 사용
+         +할 fallback Z.")] float ballStartZ = 0.5f;                     
+      10  
+      11          private GameStateManager stateManager;
+      12          private InputController inputController;
+      13          private Rigidbody rb;
+      14 +        // BowlingBall.cs 와 동일하게 Awake 에서 1회 캐싱 — 매 
+         +Update 의 Find 풀스캔 방지.                                    
+      15 +        private Transform spawnPoint;                          
+      16          private float pingPongTime = 0f;
+      17          private bool isAiming = false;
+      18          private int enteredFrame = -1;
+     ...
+      20  
+      21          public Vector3 ConfirmedPosition => confirmedPosition;
+      22  
+      23 +        void Awake()                                           
+      24 +        {                                                      
+      25 +            var spawnGo = GameObject.Find("BallSpawnPoint");   
+      26 +            spawnPoint = spawnGo != null ? spawnGo.transform : 
+         +null;                                                          
+      27 +            if (spawnPoint == null)                            
+      28 +                Debug.LogWarning($"[BallAimer] BallSpawnPoint  
+         +미발견 — Y 는 transform 차용, Z 는 ballStartZ({ballStartZ}) fal
+         +lback");                                                       
+      29 +        }                                                      
+      30 +                                                               
+      31          void Start()
+      32          {
+      33              rb = GetComponent<Rigidbody>();
+     ...
+      43  
+      44              pingPongTime += Time.deltaTime;
+      45              float x = Mathf.PingPong(pingPongTime * oscSpeed, l
+          aneHalfWidth * 2f) - laneHalfWidth;
+      36 -            transform.position = new Vector3(x, transform.posit
+         -ion.y, ballStartZ);                                            
+      46 +            // Y/Z 는 spawnPoint 의 canonical 값 차용 — transfo
+         +rm 차용 시의 interpolation/catch-up 잔여 영향 차단.            
+      47 +            float y = spawnPoint != null ? spawnPoint.position.
+         +y : transform.position.y;                                      
+      48 +            float z = spawnPoint != null ? spawnPoint.position.
+         +z : ballStartZ;                                                
+      49 +            transform.position = new Vector3(x, y, z);         
+      50          }
+      51  
+      52          private void HandleStateChanged(GameState prev, GameSta
+          te next)
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● 컴파일 클린 (errors 0 / warnings 0). 수정 요약:
+
+  변경 파일: Assets/Scripts/Gameplay/BallAimer.cs
+
+  ┌──────────────┬──────────────────────────────────────────────────────────┐
+  │     변경     │                           내용                           │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ 신규 필드    │ private Transform spawnPoint;                            │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │              │ GameObject.Find("BallSpawnPoint") 로 1회 캐싱            │
+  │ 신규 Awake() │ (BowlingBall.Awake 와 동일 패턴). 미발견 시 [BallAimer]  │
+  │              │ prefix 경고                                              │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ Update()     │ transform.position.y 차용 → spawnPoint.position.y 차용   │
+  │ 핵심 1줄 →   │ (null fallback: transform.position.y). ballStartZ 강제 → │
+  │ 3줄로        │  spawnPoint.position.z 차용 (null fallback: ballStartZ)  │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ ballStartZ   │                                                          │
+  │ 인스펙터     │ 유지 — fallback 용. Tooltip 갱신                         │
+  │ 필드         │                                                          │
+  └──────────────┴──────────────────────────────────────────────────────────┘
+
+  검증 시 확인 포인트
+
+  - 가설 1 이 맞았다면: 리셋 직후 ping-pong 도중 매번 spawnPoint.position.y/z 로
+   스냅되어 어긋남이 사라짐
+  - 여전히 어긋난다면: 가설 2 (interpolation 잔존) 또는 가설 3 (catch-up
+  FixedUpdate) 가 원인 — Fix B (rb.position 직접 + double SyncTransforms +
+  interpolation 임시 해제) 적용
+  - 콘솔에 [BallAimer] BallSpawnPoint 미발견 경고가 뜨면: 씬에서 BallSpawnPoint
+  이름 변경 또는 비활성 상태. Fallback (transform.y + ballStartZ) 로 동작 중이라
+   "수정 전 동작" 과 동일 — 위치 어긋남 가설 1 검증 불가
+
+  검증 부탁드립니다. 결과 알려주시면 가설 1 확정 또는 가설 2/3 으로
+  진행하겠습니다.
+
+✻ Crunched for 1m 18s
+
+※ recap: ResultUI 단계 1~5 완료 후, 공 리셋 위치가 간혹 어긋나는 버그의 가설 1 (BallAimer 가 Y/Z 를 spawnPoint 에서 차용) 수정을 적용해 컴파일 통과한 상태입니다. 다음 할 일은 사용자가 Play 모드에서 어긋남이 사라졌는지 검증하는 것.
+
+> 검증 완료 했고,  일단은 볼링공 스폰은 쇼트모드, 풀 모드 모두 문제없이 진행    
+  됩니다.                                                                       
+
+● 가설 1 확정 — BallAimer 가 매 프레임 Z=0.5 로 스냅하고 Y 를 interpolation
+  잔여값으로 덮어쓰던 게 주범이었습니다. README §14 에 이번 수정 기록 1줄
+  추가합니다.
+
+● Update(README.md)
+  ⎿  Added 17 lines, removed 1 line
+      578  3. File > Build Settings 열어서 Scenes In Build 에 `Assets/Sce
+           nes/Game.unity` 추가 + 기존 `Assets/Game.unity` 항목 제거 (dra
+           g-drop 으로 index 1 위치 유지)
+      579  4. `EditorBuildSettings.asset` 커밋
+      580  
+      581 -### 14-11. 참고 문서                                          
+      581 +### 14-11. 후속 세션 변경 (2026-06-19) — 볼링공 리셋 위치 미세
+          + 어긋남 수정                                                  
+      582  
+      583 +**증상**: 쇼트/풀 모드 무관, 매 투구 후 리셋 시 공 위치가 spaw
+          +nPoint 와 미세하게 어긋나는 경우가 간헐적으로 발생. 기존 6단계
+          + `ResetBall` + 3단계 방어 (검증 → 재시도 → ForceResetCoroutine
+          +) 가 막은 catastrophic 케이스 (바닥 관통) 와는 별개의, 사용자 
+          +가시적 작은 어긋남.                                           
+      584 +                                                              
+      585 +**원인**: `BallAimer.Update` 의 한 줄 `transform.position = ne
+          +w Vector3(x, transform.position.y, ballStartZ)` —             
+      586 +- Z 를 항상 인스펙터 값 `ballStartZ = 0.5f` 로 강제 스냅 (spaw
+          +nPoint.z 와 무관하게 덮어씀)                                  
+      587 +- Y 를 "그 순간의 transform.position.y" 로 차용 → ResetBall 직
+          +후 Rigidbody Interpolation 의 보간 잔여값을 그대로 락         
+      588 +                                                              
+      589 +`ResetToStartPosition` 내부 동기 검증은 통과하지만, 그 다음 프
+          +레임 `BallAimer.Update` 가 위 1줄로 Y/Z 를 다시 쓰면서 어긋남 
+          +이 도입됨.                                                    
+      590 +                                                              
+      591 +**수정**: `Assets/Scripts/Gameplay/BallAimer.cs`              
+      592 +- `Awake()` 추가 — `BowlingBall.Awake` 와 동일 패턴으로 `BallS
+          +pawnPoint` Transform 을 1회 캐싱                              
+      593 +- `Update()` Y/Z 산정 로직 변경 — spawnPoint 가 있으면 `spawnP
+          +oint.position.y/z` 를 canonical 출처로 사용. 없으면 종전 동작 
+          +(transform.y + ballStartZ) 으로 graceful degrade. `ballStartZ`
+          + 인스펙터 필드는 fallback 용으로 유지                         
+      594 +                                                              
+      595 +검증: 사용자 Play 모드 — 쇼트/풀 모드 모두 spawn 위치 정확. 가
+          +설 2 (interpolation 잔존) / 가설 3 (catch-up FixedUpdate) 는  
+          +본 수정만으로 잔존 증상 없어 추가 적용 보류.                  
+      596 +                                                              
+      597 +### 14-12. 참고 문서                                          
+      598 +                                                              
+      599  | 문서 | 용도 |
+      600  |---|---|
+      601  | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      367  
+      368  ---
+      369  
+      370 -## 14. 구현 현황 (2026-06-18 기준)                            
+      370 +## 14. 구현 현황 (2026-06-19 기준)                            
+      371  
+      372  본 섹션은 위 설계 명세 대비 실제 구현 진척도를 추적한다. 설계 
+           §1~13 은 변경하지 않고 본 섹션만 갱신.
+      373  
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      607  
+      608  ---
+      609  
+      610 -*Custom Bowling Score System — Design Specification v1.0 / Imp
+          -lementation Snapshot 2026-06-18*                              
+      610 +*Custom Bowling Score System — Design Specification v1.0 / Imp
+          +lementation Snapshot 2026-06-19*                              
+
+● 기록 완료. 본 세션 누적 작업:
+
+  ┌──────────────────────────────────────────────────────────────┬──────┐
+  │                             작업                             │ 상태 │
+  ├──────────────────────────────────────────────────────────────┼──────┤
+  │ ResultUI 단계 2~4 (코드)                                     │ ✅   │
+  ├──────────────────────────────────────────────────────────────┼──────┤
+  │ ResultUI 단계 5 (씬 자동 배선)                               │ ✅   │
+  ├──────────────────────────────────────────────────────────────┼──────┤
+  │ README §14 갱신 (§14-10 신설)                                │ ✅   │
+  ├──────────────────────────────────────────────────────────────┼──────┤
+  │ NEXT_SESSION.md 재작성                                       │ ✅   │
+  ├──────────────────────────────────────────────────────────────┼──────┤
+  │ 볼링공 리셋 위치 어긋남 수정 (BallAimer spawnPoint Y/Z 차용) │ ✅   │
+  ├──────────────────────────────────────────────────────────────┼──────┤
+  │ README §14-11 신설 (오늘 수정 기록)                          │ ✅   │
+  └──────────────────────────────────────────────────────────────┴──────┘
+
+  남은 critical path (M2 마감 임박)
+
+  NEXT_SESSION.md 에 정리된 우선순위 그대로:
+
+  1. ⚠️ Build Settings / 씬 중복 정리 — Assets/Game.unity (루트, untracked) vs
+  Assets/Scenes/Game.unity (canonical). 빌드 시 ResultUI 가 안 보일 가능성. 복구
+   절차는 README §14-10-6 에 단계별 명시
+  2. ResultUI end-to-end 수동 검증 — 5프레임 완주 → 패널 표시 +
+  점수/스트라이크/스페어 갱신 + 재시작·메인메뉴 버튼 동작
+  3. JSON SaveSystem (Phase 8) — 8개 결정사항 미해결
+
+  다음 작업 어떤 걸로 진행할까요?
+
+✻ Sautéed for 52s
+
+※ recap: Goal: ship ResultUI by M2 tomorrow. Done: ResultUI steps 2-5 wired, scene saved, plus a BallAimer fix for the ball-reset drift. Next: clean up the Assets/Game.unity vs Assets/Scenes/Game.unity duplication so mainmenu→Game actually loads the wired scene.
+
+> 3번으로 가봅시다                                                              
+
+● SaveSystem 진입 전, 기존 skeleton 확인 + 8개 결정사항을 빠르게 확정합니다.
+
+  Read 2 files (ctrl+o to expand)
+
+● 기존 skeleton 두 파일 그대로 활용 가능. 8개 결정사항에 대한 추천안을 한눈에
+  정리해 드릴 테니, 그대로 가도 되면 "그대로" 또는 변경하고 싶은 항목만
+  짚어주세요.
+
+  SaveSystem 8개 결정사항 — 추천안
+
+  #: 1
+  항목: 직렬화 라이브러리
+  추천: JsonUtility
+  근거: Unity 내장, 의존성 0, [Serializable] 만 붙으면 즉시 동작. 기존 skeleton
+    (SaveData/GameRecord) 이 이미 [Serializable] 라 작업량 최소. Newtonsoft 는
+    Dictionary/polymorphism 필요해질 때 (스킨 시스템 등) 전환
+  ────────────────────────────────────────
+  #: 2
+  항목: 저장 시점
+  추천: HandleGameOver 직후 즉시
+  근거: 데이터 손실 최소화. ResultUI 의 재시작/메인메뉴 버튼은 이미 클릭됐는데
+    저장 안 한 상태 만들지 않음. GameManager 의 OnEnterGameOver 후크에 1줄 추가
+  ────────────────────────────────────────
+  #: 3
+  항목: highScores 상한
+  추천: Top 5 per mode (쇼트 5개 + 풀 5개 = 총 10개)
+  근거: 초등 저학년 대상 → 단순한 게 핵심. 화면에 5줄로 깔끔 표시 가능. 모드별
+    분리는 5/10프레임 점수 비교 불가능 (퍼펙트 75 vs 150) 해소
+  ────────────────────────────────────────
+  #: 4
+  항목: 정렬 정책
+  추천: 점수 내림차순, 동점 시 playedAt 최신순
+  근거: 직관적. 동점 정책은 자기 갱신 욕구 자극 (방금 친 동점이 위로 올라옴)
+  ────────────────────────────────────────
+  #: 5
+  항목: 첫 실행 (파일 없음)
+  추천: 빈 SaveData 반환
+  근거: 호출자 책임 분산 방지. null 체크 흩어지지 않음
+  ────────────────────────────────────────
+  #: 6
+  항목: 저장 실패 정책
+  추천: Debug.LogError + 게임 진행 계속
+  근거: 초등 저학년 대상 → 에러 모달 보이면 혼란. 콘솔 로그로 개발자만 확인
+  ────────────────────────────────────────
+  #: 7
+  항목: 백업·복구
+  추천: 단일 파일 (.bak 없음)
+  근거: YAGNI. 추후 실제 손상 케이스 보고되면 도입
+  ────────────────────────────────────────
+  #: 8
+  항목: 세이브 버전 관리
+  추천: version: 1 필드 추가
+  근거: 추후 마이그레이션 비용 거의 0. 미래의 자신에게 주는 1줄 보험
+
+  도출되는 구조
+
+  // SaveData.cs — 필드 추가
+  public int version = 1;
+  public List<GameRecord> shortModeHighScores;  // Top 5
+  public List<GameRecord> fullModeHighScores;   // Top 5
+  public string selectedBallSkin;
+  public string selectedCharacterSkin;
+
+  // 신규 SaveSystem.cs (static)
+  public static void Save(SaveData data);
+  public static SaveData Load();          // 파일 없으면 빈 SaveData
+  private const string FILE_NAME = "save.json";
+  private static string Path => Application.persistentDataPath + "/" +
+  FILE_NAME;
+
+  // 신규 HighScoreService.cs (static)
+  public static void Record(string modeName, int frameCount, int score);
+  public static List<GameRecord> GetTop(string modeName);
+  private const int TOP_N_PER_MODE = 5;
+
+  통합 지점
+
+  - GameManager.OnEnterGameOver() → HighScoreService.Record(ruleConfig.ModeName,
+   ruleConfig.FrameCount, totalScore) 1줄
+  - ResultUI 는 이번 작업에선 표시 안 함 (베스트 비교/강조는 후속 작업으로 분리)
+
+  추천안 그대로 갈지 변경하고 싶은 항목 있을지 알려주세요.
+
+✻ Churned for 1m 2s
+
+※ recap: We're implementing Phase 8 JSON SaveSystem (high score persistence), and I've laid out 8 design decisions with recommended defaults. Next action: you tell me whether to proceed with all recommended defaults or override specific items.
+
+> Gameover_scene 을 만들고 ResultPanel을 삭제 했습니다. scene 별로 나누어서     
+  제작 하는 편이 더욱 효과 적일 것 같습니다. Gameover_scene의 canvas에          
+  gameover_score가 있습니다. 해당 텍스트에 최종 점수가 표시되게 해주시고 같은   
+  canvas에 있는 메인메뉴 버튼을 누르면 게임 초기화면으로 돌아가고, quit 버튼을  
+  누르면 게임이 종료되게 설정해 주세요 이미 있는 코드를 살펴보고 수정 해주세요  
+
+● 방향 전환 이해됐습니다 — overlay 패널이 아니라 별도 씬으로. 먼저
+  Gameover_scene 구조 + 기존 ResultUI 상태 + OnGameOver 처리 경로를 확인합니다.
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+● Gameover_scene 구조도 확인합니다 (현재 활성 씬 + 빌드 설정 동시).
+
+  Read 1 file, called UnityMCP 2 times (ctrl+o to expand)
+
+● Build Settings 에도 Gameover_scene 등록이 필요한 상태 (현재 index 0,1 만
+  있음). Gameover_scene 구조를 인스펙트합니다.
+
+  Called UnityMCP 10 times (ctrl+o to expand)
+
+● 상태 파악 완료. 정리:
+
+  Gameover_scene 현재 구조 (3 root, dirty 상태):
+  - Main Camera, Directional Light
+  - Canvas — 자식 3개: Mainmenu_button (Button + TMP label), Quit_button (Button
+   + TMP label), gameover_score (TMP_Text)
+  - ⚠️ EventSystem 누락 — 추가 안 하면 버튼 클릭 안 됨
+  - ⚠️ Build Settings 에 미등록
+
+  기존 코드 재사용 분석:
+  - GameModeSelector 패턴을 그대로 답습해서 GameResultHolder (DontDestroyOnLoad
+  싱글톤) 신규 — 씬 전이 사이 점수 보관
+  - GameManager.OnEnterGameOver (line 178~185) 에 1줄 추가 — 점수 캐시 +
+  SceneManager.LoadScene("Gameover_scene")
+  - 신규 GameOverUI.cs — Gameover_scene Canvas 에 부착, score 표시 + 2버튼 콜백
+  - ResultUI.cs 는 사용 안 됨 — Game.unity Canvas 에 컴포넌트 잔존해도 Validate
+  가 실패해 자동 비활성화되므로 무해. 동시에 잔존하면 혼란 우려 있어 컴포넌트만
+  제거 권장
+
+  작업 순서로 진행하겠습니다.
+
+● Write(Assets\Scripts\Core\GameResultHolder.cs)
+  ⎿  Wrote 68 lines to Assets\Scripts\Core\GameResultHolder.cs
+       2 using UnityEngine;
+       3 namespace BowlingGame
+       4 {
+       5     /// <summary>
+       6     /// 게임 종료 시점의 결과 (최종 점수 + 모드) 를 다음 씬 (Gam
+       7     /// DontDestroyOnLoad 로 씬 전이 사이 상태를 유지한다. <see 
+         cref="GameModeSelector"/> 와 동일 패턴.
+       8     /// </summary>
+       9     /// <remarks>
+      10     /// 사용 흐름:
+     … +70 lines (ctrl+o to expand)
+
+● Update(Assets\Scripts\Core\GameManager.cs)
+  ⎿  Added 1 line
+      1  using System;
+      2  using UnityEngine;
+      3 +using UnityEngine.SceneManagement;                              
+      4  using Bowling.Scoring;
+      5  
+      6  namespace BowlingGame
+
+● Update(Assets\Scripts\Core\GameManager.cs)
+  ⎿  Added 6 lines, removed 1 line
+      176              transitionController.HandlePostThrow();
+      177          }
+      178  
+      179 +        private const string GAMEOVER_SCENE_NAME = "Gameover_s
+          +cene";                                                        
+      180 +                                                              
+      181          private void OnEnterGameOver()
+      182          {
+      183              settleDetector.StopDetection();
+      184              int score   = frameManager.GetTotalScore();
+      185              int perfect = ruleConfig.GetPerfectScore();
+      186              Debug.Log($"[GameOver] 게임 종료! 모드: {ruleConfi
+           g.ModeName}, 최종 점수: {score}점, 퍼펙트 대비: {score}/{perfe
+           ct}");
+      185 -            // ResultUI 가 OnGameOver 이벤트 구독으로 패널 표 
+          -시 + 재시작/메뉴 버튼 제공 (단계 2~5).                        
+      187 +                                                              
+      188 +            // 결과를 다음 씬으로 전달 + Gameover_scene 로드. 
+      189 +            GameResultHolder.Instance.SetResult(score, ruleCon
+          +fig.ModeName);                                                
+      190 +            SceneManager.LoadScene(GAMEOVER_SCENE_NAME);      
+      191          }
+      192  
+      193          // ---------- 외부 이벤트 핸들러 ----------
+
+● Write(Assets\Scripts\UI\GameOverUI.cs)
+  ⎿  Wrote 93 lines to Assets\Scripts\UI\GameOverUI.cs
+       2 using UnityEngine.UI;
+       3 using UnityEngine.SceneManagement;
+       4 using TMPro;
+       5 
+       6 namespace BowlingGame
+       7 {
+       8     /// <summary>
+       9     /// Gameover_scene 의 Canvas 에 부착되는 결과 화면 UI.
+      10     /// <see cref="GameResultHolder"/> 의 마지막 점수를 읽어 <c>
+         gameover_score</c> TMP_Text 에 표시하고
+     … +100 lines (ctrl+o to expand)
+
+● 컴파일 확인 후 Gameover_scene 배선합니다.
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● 컴파일 클린. Gameover_scene 배선합니다 — GameOverUI 부착, 3 필드 와이어링,
+  EventSystem 추가, Build Settings 등록.
+
+  Called UnityMCP (ctrl+o to expand)
+
+● 스크립트 컴파일이 아직 반영 안 됨. force refresh 후 재시도합니다.
+  Called UnityMCP 3 times (ctrl+o to expand)
+
+● 배선 완료. Build Settings 확인 후 Play 모드로 검증합니다.
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● Gameover_scene 활성 + Build Settings index 2 등록 확인. Play 모드로 GameOverUI
+   동작 검증합니다.
+
+  Called UnityMCP 3 times (ctrl+o to expand)
+
+● [GameOver] 로그가 안 떴습니다. 잠시 stop 하고 컴포넌트 상태 확인합니다.
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● 컴포넌트 + 필드 정상 와이어링 확인. Play 모드 console 더 자세히 조회 — Warning
+   위주로.
+
+  Called UnityMCP 4 times (ctrl+o to expand)
+
+● 복잡한 multi-scene Play 환경이 로그 수집을 방해하는 것 같습니다. 잠시 stop 후
+  Gameover_scene 단독으로 테스트합니다.
+
+  Called UnityMCP 7 times (ctrl+o to expand)
+
+● GameOverUI 실제로는 정상 동작 — gameOverScoreText.text='0' 확인
+  (HasResult=false 경로 통과). 콘솔 로그가 안 보이는 건 별개 문제. 다시
+  읽어보겠습니다.
+
+  Called UnityMCP 4 times (ctrl+o to expand)
+
+● MCP console reader 가 일부 warning 을 캡처 못 하는 것 같지만, GameOverUI.Start
+   는 정상 실행 — gameOverScoreText.text='0' 으로 HasResult=false 분기를 거친 게
+   확인됐습니다. 메인메뉴/Quit 버튼 click 도 execute_code 로 시뮬레이션해
+  확인합니다.
+
+  Called UnityMCP 3 times (ctrl+o to expand)
+
+● 메인메뉴 버튼 → mainmenu 전환 정상 작동 확인. Play 종료 후 문서 갱신합니다.
+
+  Called UnityMCP (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      383  | 6 | UI/UX | 🟡 진행 중 |
+      384  | &nbsp;&nbsp;6-a | 점수판 — 현재 프레임의 1구/2구/총점 (`Scor
+           eboardUI`) | ✅ 완료 (씬 배선 + Play 검증 완료) |
+      385  | &nbsp;&nbsp;6-b | 점수판 — 10프레임 모두 동적 생성 | ❌ 미착
+           수 |
+      386 -| &nbsp;&nbsp;6-c | 결과 화면 (`ResultUI`) — 점수/스트라이크/ 
+          -스페어 + 재시작·메뉴 버튼 | ✅ 완료 (단계 1~5 모두 완료, 2026-
+          -06-18) — `Assets/Scenes/Game.unity` Canvas 에 ResultPanel + 자
+          -식 5개 자동 배선, Play 검증 `[Result] 초기화 완료` + `[Result]
+          - 게임 초기화 — 패널 숨김` 로그 통과 |                         
+      386 +| &nbsp;&nbsp;6-c | 결과 화면 — 점수 + 메인메뉴/Quit 버튼 | ✅
+          + 완료 (구조 변경, 2026-06-19) — 오버레이 패널(`ResultUI`)에서 
+          +**별도 씬(`Gameover_scene` + `GameOverUI`)** 으로 전환. `GameR
+          +esultHolder` 싱글턴으로 점수 인계. 재시작 버튼은 제거되고 메인
+          +메뉴/Quit 2버튼 구성 |                                        
+      387  | &nbsp;&nbsp;6-d | 메인 메뉴 → 게임 씬 전이 + 모드 선택 | ✅ 
+           완료 (`mainmenu.unity` 구성 + `MainMenuUI` + `GameModeSelector
+           ` + Build Settings 등록 + 양 모드 Play 검증) |
+      388  | &nbsp;&nbsp;6-e | 튜토리얼 화면 | ❌ 미착수 (형식 미결정) |
+      389  | 7 | 폴리싱 (효과음/BGM/파티클/스킨) | ❌ 미착수 |
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      394  
+      395  상세 시그니처·이벤트·계약은 **`AI_PROMPT_REFERENCE.md`** 참조 
+           (단일 출처).
+      396  
+      397 -- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `Ga
+          -meManager`(싱글톤, `[DefaultExecutionOrder(1000)]`) — ModeSele
+          -ctor 폴백 분기 포함, **`GameModeSelector`** (DontDestroyOnLoad
+          - 싱글톤 — 신규)                                               
+      397 +- **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `Ga
+          +meManager`(싱글톤, `[DefaultExecutionOrder(1000)]`) — ModeSele
+          +ctor 폴백 분기 + `OnEnterGameOver` 가 결과 캐시 후 `Gameover_s
+          +cene` 로드, **`GameModeSelector`** (DontDestroyOnLoad 싱글톤),
+          + **`GameResultHolder`** (DontDestroyOnLoad 싱글톤 — 신규, 점수
+          ++모드명 인계)                                                 
+      398  - **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager
+           `, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDe
+           tector`, `ThrowTransitionController` — `BowlingBall.ResetToSta
+           rtPosition()` 에 위치 검증·재시도·최종 폴백 로직 포함
+      399  - **Scoring** (`Bowling.Scoring`, Unity 비의존 어셈블리 `Bowli
+           ng.Domain`): `Frame`, `FrameType`, `ScoreCalculator`(정적), `S
+           coringConstants`(정적), `FrameManager`(MonoBehaviour), `Bowlin
+           gRuleConfig`(ScriptableObject, `BowlingGame` 네임스페이스 — 어
+           셈블리 주의)
+      400  - **UI**: `PowerGaugeUI`, `ScoreboardUI` (`gameover_score` TMP
+           _Text 연동 포함), **`MainMenuUI`**, **`ResultUI`** (완료 — Can
+           vas 부착, ResultPanel + 자식 5개, 7개 SerializeField 모두 와이
+           어링)
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      397  - **Core**: `GameState`(enum), `GameStateManager`(싱글톤), `Ga
+           meManager`(싱글톤, `[DefaultExecutionOrder(1000)]`) — ModeSele
+           ctor 폴백 분기 + `OnEnterGameOver` 가 결과 캐시 후 `Gameover_s
+           cene` 로드, **`GameModeSelector`** (DontDestroyOnLoad 싱글톤),
+            **`GameResultHolder`** (DontDestroyOnLoad 싱글톤 — 신규, 점수
+           +모드명 인계)
+      398  - **Gameplay**: `BowlingBall`, `BallAimer`, `Pin`, `PinManager
+           `, `InputController`(싱글톤), `CameraFollow`, `PhysicsSettleDe
+           tector`, `ThrowTransitionController` — `BowlingBall.ResetToSta
+           rtPosition()` 에 위치 검증·재시도·최종 폴백 로직 포함
+      399  - **Scoring** (`Bowling.Scoring`, Unity 비의존 어셈블리 `Bowli
+           ng.Domain`): `Frame`, `FrameType`, `ScoreCalculator`(정적), `S
+           coringConstants`(정적), `FrameManager`(MonoBehaviour), `Bowlin
+           gRuleConfig`(ScriptableObject, `BowlingGame` 네임스페이스 — 어
+           셈블리 주의)
+      400 -- **UI**: `PowerGaugeUI`, `ScoreboardUI` (`gameover_score` TMP
+          -_Text 연동 포함), **`MainMenuUI`**, **`ResultUI`** (완료 — Can
+          -vas 부착, ResultPanel + 자식 5개, 7개 SerializeField 모두 와이
+          -어링)                                                         
+      400 +- **UI**: `PowerGaugeUI`, `ScoreboardUI` (`gameover_score` TMP
+          +_Text 연동 포함), **`MainMenuUI`**, **`GameOverUI`** (신규 — G
+          +ameover_scene Canvas 부착, 3개 SerializeField). `ResultUI` 는 
+          +2026-06-19 구조 변경으로 obsolete (Game.unity Canvas 에 컴포넌
+          +트 잔존 가능하나 panelRoot 등 필드 null → Validate 실패 → 자동
+          + 비활성)                                                      
+      401  - **Debug**: `DebugResetController` (R 키 → `GameManager.Resta
+           rtGame()`)
+      402  - **Persistence**: `GameRecord`, `SaveData` (TODO)
+      403  
+● Update(README.md)
+  ⎿  Added 6 lines, removed 2 lines
+      406  - **`Assets/Scenes/Game.unity`** — 메인 게임 씬. 점수판 포함, 
+           Play 시 즉시 1프레임 시작.
+      407    - GameObject 10개 (Main Camera, Directional Light, Ground, L
+           ane_Root, BowlingBall, GameManager ⓐ/ⓑ, HUD_Canvas, EventSyste
+           m, Canvas)
+      408    - **GameManager 두 개 분리**: ⓐ는 GameStateManager+InputCont
+           roller+DebugResetController, ⓑ는 GameManager+PhysicsSettleDete
+           ctor+ThrowTransitionController+FrameManager
+      409 -  - Canvas 자식: `total_score`/`total_score_n`, `current_frame
+          -`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec`, **`gam
+          -eover_score`**, **`ResultPanel`** (=`panelRoot`, 5자식: `final
+          -_score`, `strike_count`, `spare_count`, `restart_button`, `mai
+          -n_menu_button`)                                               
+      410 -  - Canvas 부착 컴포넌트: `ScoreboardUI`, **`ResultUI`** (단계
+          - 5 자동 배선, 2026-06-18) — 자세한 좌표·치수·수정 가이드는 §14
+          --10 참조                                                      
+      409 +  - Canvas 자식: `total_score`/`total_score_n`, `current_frame
+          +`/`frame_n`, `frame_N_first`, `frame_/`, `frame_N_sec`, `gameo
+          +ver_score`. (이전 `ResultPanel` 은 2026-06-19 구조 변경으로 삭
+          +제됨)                                                         
+      410 +  - Canvas 부착 컴포넌트: `ScoreboardUI`. (`ResultUI` 컴포넌트
+          +는 잔존 가능 — 필드 null 이라 자동 비활성)                    
+      411 +- **`Assets/Scenes/Gameover_scene.unity`** (Build index 2, 신 
+          +규) — 게임 종료 결과 화면                                     
+      412 +  - 루트 GameObject 4개: Main Camera, Directional Light, Event
+          +System (자동 추가, 2026-06-19), Canvas (`GameOverUI` 부착)    
+      413 +  - Canvas 자식 3개: `Mainmenu_button` (Button + TMP label "메
+          +인메뉴"), `Quit_button` (Button + TMP label "Quit"), `gameover
+          +_score` (TMP_Text — 최종 점수)                                
+      414 +  - GameOverUI 인스펙터 배선: `gameOverScoreText` → `gameover_
+          +score`, `mainMenuButton` → `Mainmenu_button`, `quitButton` → `
+          +Quit_button`                                                  
+      415  - **`Assets/Scenes/mainmenu.unity`** — 메인메뉴 씬 (Build inde
+           x 0, 시작 씬)
+      416    - 루트 GameObject 6개: Main Camera, Directional Light, Globa
+           l Volume, **GameModeSelector**, EventSystem (InputSystemUIInpu
+           tModule), **Canvas** (MainMenuUI 부착)
+      417    - Canvas 자식 3개: `Title` (TMP "Bowling Champion"), `ShortB
+           utton` (Button+Image+Label), `FullButton` (Button+Image+Label)
+
+● Update(README.md)
+  ⎿  Added 2 lines, removed 1 line
+      425  ### 14-5. Build Settings
+      426  
+      427  - index 0: `Assets/Scenes/mainmenu.unity` (시작 씬)
+      428 -- index 1: ⚠️ 현재 `Assets/Game.unity` (루트 — untracked 신규 
+          -파일) 로 등록되어 있음. 의도는 `Assets/Scenes/Game.unity` (can
+          -onical) 였으나 누군가가 씬을 루트로 복제 저장하면서 Build Sett
+          -ings 도 그에 맞춰 갱신된 상태. ResultUI 등 모든 최신 배선은 `A
+          -ssets/Scenes/Game.unity` 에 있으므로 **다음 세션에서 정리 필요
+          -** (둘 중 하나로 통합 + Build Settings 재등록 + 중복 씬 삭제).
+          - 자세한 진단·복구는 §14-10 마지막 참조                        
+      428 +- index 1: ⚠️ 현재 `Assets/Game.unity` (루트 — untracked 신규 
+          +파일) 로 등록. 의도는 `Assets/Scenes/Game.unity` (canonical). 
+          +다음 세션에서 정리 필요. 자세한 진단·복구는 §14-10-6 참조     
+      429 +- index 2: `Assets/Scenes/Gameover_scene.unity` (신규, 2026-06
+          +-19)                                                          
+      430  
+      431  ### 14-6. 다음 작업
+      432  
+
+● Update(README.md)
+  ⎿  Added 38 lines, removed 1 line
+      599  
+      600  검증: 사용자 Play 모드 — 쇼트/풀 모드 모두 spawn 위치 정확. 가
+           설 2 (interpolation 잔존) / 가설 3 (catch-up FixedUpdate) 는 
+           본 수정만으로 잔존 증상 없어 추가 적용 보류.
+      601  
+      602 -### 14-12. 참고 문서                                          
+      602 +### 14-12. 후속 세션 변경 (2026-06-19) — 결과 화면을 별도 씬으
+          +로 분리                                                       
+      603  
+      604 +**동기**: ResultUI 오버레이 패널 구조를 폐기하고 별도 씬 (`Gam
+          +eover_scene`) 으로 분리. 씬 단위 분리가 더 명확하고, 향후 결과
+          + 화면 확장 (퍼펙트 강조, 별/이펙트, 베스트 비교) 시 Game 씬에 
+          +영향을 안 주고 자유롭게 작업 가능.                            
+      605 +                                                              
+      606 +**구조 변경**:                                                
+      607 +- 사용자가 `Gameover_scene.unity` 신규 생성 (Main Camera + Dir
+          +ectional Light + Canvas 자식 3개: `Mainmenu_button` / `Quit_bu
+          +tton` / `gameover_score`)                                     
+      608 +- 사용자가 `Game.unity` 에서 `ResultPanel` 삭제 (ResultUI 컴포
+          +넌트는 잔존 가능 — Validate 실패로 자동 비활성)               
+      609 +- 재시작 버튼 제거, 메인메뉴/Quit 2버튼 구성 — Quit 은 `Applic
+          +ation.Quit()` (Editor 에서는 `EditorApplication.isPlaying = fa
+          +lse`)                                                         
+      610 +                                                              
+      611 +**신규 파일**:                                                
+      612 +                                                              
+      613 +| 파일 | 역할 |                                               
+      614 +|---|---|                                                     
+      615 +| `Assets/Scripts/Core/GameResultHolder.cs` | DontDestroyOnLoa
+          +d 싱글턴. `GameModeSelector` 와 동일 패턴. `LastScore` / `Last
+          +ModeName` / `HasResult` 노출. Instance 게터는 lazy — 씬에 없으
+          +면 자동 GameObject 생성 (Gameover_scene 단독 Play 호환) |     
+      616 +| `Assets/Scripts/UI/GameOverUI.cs` | Gameover_scene Canvas 부
+          +착. Start 에서 `GameResultHolder.Instance.LastScore` 를 읽어 `
+          +gameover_score` TMP 갱신. 메인메뉴 버튼 → `SceneManager.LoadSc
+          +ene("mainmenu")`, Quit 버튼 → `Application.Quit()`. HasResult=
+          +false 시 점수 0 표시 + 경고 로그 (단독 Play 대비) |           
+      617 +                                                              
+      618 +**수정 파일**:                                                
+      619 +                                                              
+      620 +| 파일 | 변경 |                                               
+      621 +|---|---|                                                     
+      622 +| `Assets/Scripts/Core/GameManager.cs` | `using UnityEngine.Sc
+          +eneManagement;` 추가. `OnEnterGameOver()` 에서 기존 로그 후 `G
+          +ameResultHolder.Instance.SetResult(score, ruleConfig.ModeName)
+          +` + `SceneManager.LoadScene("Gameover_scene")` 호출. `GAMEOVER
+          +_SCENE_NAME = "Gameover_scene"` 상수 단일 출처 |              
+      623 +                                                              
+      624 +**Gameover_scene 자동 배선** (`mcp__UnityMCP__execute_code` 실
+          +행, 멱등):                                                    
+      625 +1. `Canvas` 노드 발견 + 자식 3개 (`Mainmenu_button`, `Quit_but
+          +ton`, `gameover_score`) 매핑                                  
+      626 +2. **`EventSystem` 누락 감지 → 자동 추가** (UnityEngine.EventS
+          +ystems.EventSystem + InputSystemUIInputModule). 없으면 버튼 클
+          +릭 안 됨                                                      
+      627 +3. `GameOverUI` 컴포넌트 Canvas 에 추가 + 3개 SerializeField  
+          +리플렉션 와이어링                                             
+      628 +4. 씬 저장 + Build Settings index 2 등록                      
+      629 +                                                              
+      630 +**검증** (Editor Play 모드, Gameover_scene 단독):             
+      631 +- `gameover_score.text` 가 `"0"` 으로 갱신 — `HasResult==false
+          +` 분기 정상 통과 (게임 진행 없이 직접 Play 한 케이스)         
+      632 +- Mainmenu 버튼 onClick.Invoke() → mainmenu 씬으로 전환 확인 (
+          +씬 카운트 1, active=mainmenu)                                 
+      633 +- Quit 버튼 동작은 Editor 에서 Play 종료를 유발하므로 자동 검 
+          +증 생략 — 실제 빌드/플레이 시 확인 권장                       
+      634 +                                                              
+      635 +**잔여 이슈**:                                                
+      636 +- ResultUI.cs 파일은 의도적으로 삭제하지 않음 — 추후 결과 화면
+          +을 다시 오버레이로 합치는 옵션이 열려 있도록. 정리 원하면 `Ass
+          +ets/Scripts/UI/ResultUI.cs` 및 Game.unity Canvas 의 ResultUI  
+          +컴포넌트 제거 가능                                            
+      637 +- Build Settings index 1 (`Assets/Game.unity` 루트) vs canonic
+          +al `Assets/Scenes/Game.unity` 중복 문제는 여전히 미해결 (§14-1
+          +0-6). 단, 본 변경은 양쪽 씬 모두에 동일하게 적용되므로 (스크립
+          +트 참조 공통) 새 구조 동작에는 무영향                         
+      638 +                                                              
+      639 +### 14-13. 참고 문서                                          
+      640 +                                                              
+      641  | 문서 | 용도 |
+      642  |---|---|
+      643  | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
+
+● NEXT_SESSION.md 도 갱신 — 결과화면 작업이 완료된 상태로 우선순위 재배치합니다.
+
+● Update(NEXT_SESSION.md)
+  ⎿  Added 5 lines, removed 5 lines
+      1  # 다음 세션 재개 가이드
+      2  
+      3 -> **작성일**: 2026-06-18 (이전: 2026-06-07 ResultUI 단계 2 진입 
+        -가이드)                                                         
+      3 +> **작성일**: 2026-06-19 (이전: 2026-06-18 ResultUI 단계 2~5 완 
+        +료)                                                             
+      4  > **목적**: 세션 간 컨텍스트 손실 없이 다음 우선순위를 이어가기 
+         위한 단일 출처.
+      5 -> **선행 문서**: `README.md` §14 (특히 §14-10), `AI_PROMPT_REFER
+        -ENCE.md` (컨벤션·구조)                                          
+      5 +> **선행 문서**: `README.md` §14 (특히 §14-10 ~ §14-12), `AI_PRO
+        +MPT_REFERENCE.md` (컨벤션·구조)                                 
+      6  
+      7  ---
+      8  
+     ...
+      10  
+      11  | 항목 | 값 |
+      12  |---|---|
+      13 -| 직전 완료 작업 (2026-06-18) | **`ResultUI` 단계 2~5 모두 완료
+         -** + 씬 배선 (`Assets/Scenes/Game.unity` Canvas) + 정적 검증 (`
+         -[Result] 초기화 완료` / `[Result] 게임 초기화 — 패널 숨김` 로그
+         -) |                                                            
+      14 -| 다음 작업 우선순위 | 1. ⚠️ Build Settings / 씬 중복 정리 → 2. 
+         -ResultUI end-to-end 수동 검증 → 3. JSON SaveSystem → 4. 10프레 
+         -임 동적 점수판 / 튜토리얼 / 테스트 리팩토링 |                  
+      13 +| 직전 완료 작업 (2026-06-19) | **결과 화면 구조 변경** — 오버 
+         +레이 패널 → 별도 씬 (`Gameover_scene` + `GameOverUI` + `GameRes
+         +ultHolder`). 자동 배선 + EventSystem 추가 + Build Settings inde
+         +x 2 등록 + Play 검증 통과. **BallAimer 리셋 위치 어긋남 수정** 
+         +(가설 1 확정, Y/Z spawnPoint 차용) |                           
+      14 +| 다음 작업 우선순위 | 1. ⚠️ Build Settings / 씬 중복 정리 → 2. 
+         +ResultUI.cs / Game.unity Canvas 의 ResultUI 컴포넌트 정리 (선택
+         +) → 3. JSON SaveSystem → 4. 10프레임 동적 점수판 / 튜토리얼 /  
+         +테스트 리팩토링 |                                              
+      15  | 현재 위치 | **우선순위 1 (Build Settings 복구) 착수 대기** |
+      16 -| M2 마일스톤 | 2026-06-20 — 2일 남음. 우선순위 1·2 가 critical
+         - path |                                                        
+      16 +| M2 마일스톤 | 2026-06-20 — 1일 남음. 우선순위 1 만 critical p
+         +ath (결과 화면 자체는 완료) |                                  
+      17  
+      18  ---
+      19  
+
+● Update(NEXT_SESSION.md)
+  ⎿  Added 15 lines, removed 7 lines
+      26  - 2026-06-06: 메인메뉴 흐름 6단계 (mainmenu.unity + GameModeSel
+          ector + MainMenuUI + FullModeRule + Build Settings)
+      27  - 2026-06-07: ResultUI 단계 1 (골격)
+      28  
+      29 -### 1-2. 본 세션 산출물 (2026-06-18)                           
+      29 +### 1-2. 직전 세션 산출물 (2026-06-18)                         
+      30  
+      31 -**ResultUI 단계 2~5 완료**:                                    
+      32 -- 단계 2 — `Start()` / `OnDestroy()` / `Validate()` (7개 필드 n
+         -ull 체크)                                                      
+      33 -- 단계 3 — 상수 2개 (`COUNT_FORMAT`, `MAIN_MENU_SCENE_NAME`) + 
+         -헬퍼 5개 (`CountStrikes`, `CountSpares`, `FormatCount`, `ShowPa
+         -nel`, `HidePanel`)                                             
+      34 -- 단계 4 — `HandleGameInitialized` / `HandleGameOver` / `OnRest
+         -artClicked` / `OnMainMenuClicked`                              
+      35 -- 단계 5 — `Assets/Scenes/Game.unity` Canvas 에 `ResultPanel`  
+         -자동 배선 (자식 5개 + ResultUI 컴포넌트 + 7개 필드 리플렉션 할 
+         -당). 폰트는 씬 내 기존 TMP 에서 `NotoSansKR-Black SDF` 자동 차 
+         -용                                                             
+      31 +**ResultUI 단계 2~5 완료** — 오버레이 패널 구조. 자세한 좌표·치
+         +수·수정 가이드는 `README.md` §14-10 참조.                      
+      32  
+      37 -> 자세한 좌표·치수·수정 가이드는 **`README.md` §14-10** 참조.  
+      33 +### 1-3. 본 세션 산출물 (2026-06-19)                           
+      34  
+      35 +**볼링공 리셋 위치 어긋남 수정** (`Assets/Scripts/Gameplay/Ball
+         +Aimer.cs`):                                                    
+      36 +- 가설 1 (`BallAimer` 의 Z=0.5 강제 스냅 + Y interpolation 잔여
+         +값 락) 직격                                                    
+      37 +- `BallSpawnPoint` Transform 을 `Awake` 에서 1회 캐싱 (BowlingB
+         +all.cs 와 동일 패턴)                                           
+      38 +- `Update` 의 Y/Z 차용을 `spawnPoint.position.y`/`.z` 로 변경. 
+         +사용자 검증 완료                                               
+      39 +                                                               
+      40 +**결과 화면 구조 변경** — 오버레이 → 별도 씬:                  
+      41 +- 신규 `Assets/Scripts/Core/GameResultHolder.cs` — DontDestroyO
+         +nLoad 싱글턴. `LastScore` / `LastModeName` / `HasResult` 노출. 
+         +Lazy `Instance` getter (Gameover_scene 단독 Play 호환)         
+      42 +- 신규 `Assets/Scripts/UI/GameOverUI.cs` — Gameover_scene Canva
+         +s 부착. `gameover_score` 표시 + 메인메뉴/Quit 버튼 콜백        
+      43 +- `Assets/Scripts/Core/GameManager.cs` — `using UnityEngine.Sce
+         +neManagement` 추가, `OnEnterGameOver` 에서 `GameResultHolder.Se
+         +tResult` + `SceneManager.LoadScene("Gameover_scene")`          
+      44 +- `Assets/Scenes/Gameover_scene.unity` 자동 배선 — Canvas 에 Ga
+         +meOverUI 부착 + 3 필드 와이어링 + EventSystem 추가 (누락 감지) 
+         ++ Build Settings index 2 등록                                  
+      45 +- 검증: Gameover_scene 단독 Play → `gameover_score.text='0'` (H
+         +asResult=false 경로) → Mainmenu 버튼 click → mainmenu 씬 전환  
+         +확인                                                           
+      46 +                                                               
+      47  ### 1-3. 검증된 시퀀스 (2026-06-18 Play 모드)
+      48  
+      49  ```
+
+● Update(NEXT_SESSION.md)
+  ⎿  Added 13 lines, removed 9 lines
+      44  - `Assets/Scenes/Gameover_scene.unity` 자동 배선 — Canvas 에 Ga
+          meOverUI 부착 + 3 필드 와이어링 + EventSystem 추가 (누락 감지) 
+          + Build Settings index 2 등록
+      45  - 검증: Gameover_scene 단독 Play → `gameover_score.text='0'` (H
+          asResult=false 경로) → Mainmenu 버튼 click → mainmenu 씬 전환 
+          확인
+      46  
+      47 -### 1-3. 검증된 시퀀스 (2026-06-18 Play 모드)                  
+      47 +### 1-4. 검증된 시퀀스 (2026-06-19)                            
+      48  
+      49 +**Game 씬 단독 Play** (BallAimer 수정 후):                     
+      50  ```
+      50 -[Scoreboard] 초기화 완료 → [Result] 초기화 완료 — FrameManager 
+         -이벤트 + 버튼 콜백 구독                                        
+      51 -→ [FrameManager] 초기화 완료 (모드: 쇼트 모드, 총 5프레임)     
+      52 -→ [Scoreboard] 게임 초기화 → [Result] 게임 초기화 — 패널 숨김  
+      53 -→ [Scoreboard] 프레임 1 시작 → [GameManager] BeginGame → Aiming
+         -Position                                                       
+      51 +[Scoreboard] / [FrameManager] / [GameManager BeginGame] / [PinM
+         +anager] / [State] AimingPosition                               
+      52 +... 사용자 검증 — 쇼트/풀 모드 양쪽 공 리셋 정확               
+      53  ```
+      54  
+      56 -**미검증 (다음 세션 수동):**                                   
+      57 -- 5프레임 완주 → `HandleGameOver` → 패널 표시 + 점수/스트라이크
+         -/스페어 갱신                                                   
+      58 -- `restart_button` 클릭 → `GameManager.RestartGame()` → 패널 숨
+         -김 + 게임 재시작                                               
+      59 -- `main_menu_button` 클릭 → `SceneManager.LoadScene("mainmenu")
+         -` → 메인메뉴 복귀                                              
+      55 +**Gameover_scene 단독 Play**:                                  
+      56 +```                                                            
+      57 +gameover_score.text='0' (HasResult=false 경로)                 
+      58 +Mainmenu_button.onClick.Invoke() → 씬 카운트 1, active=mainmenu
+      59 +```                                                            
+      60  
+      61 +**미검증 (수동):**                                             
+      62 +- 전체 흐름 mainmenu → Game → 5프레임 완주 → OnEnterGameOver → 
+         +Gameover_scene 자동 전환 → 점수 표시                           
+      63 +- Quit 버튼 — Editor 에서는 Play 종료 (자동 검증 시 Editor 정지
+         + 유발), 실제 빌드/플레이 시 확인 권장                          
+      64 +                                                               
+      65  ---
+      66  
+      67  ## 2. 우선순위 1 — Build Settings / 씬 중복 정리 ⚠️
+
+● 작업 + 문서 갱신 완료. 정리:
+
+  본 단계 결과
+
+  신규 파일
+  - Assets/Scripts/Core/GameResultHolder.cs — DontDestroyOnLoad 싱글턴
+  (GameModeSelector 패턴). Lazy Instance 게터로 자동 GameObject 생성 →
+  Gameover_scene 단독 Play 도 안전
+  - Assets/Scripts/UI/GameOverUI.cs — gameover_score 갱신 + 메인메뉴/Quit 콜백.
+  Validate 7개→3개로 축소
+
+  기존 코드 수정
+  - GameManager.cs — using UnityEngine.SceneManagement; + OnEnterGameOver 에 2줄
+   추가 (GameResultHolder.SetResult(...) +
+  SceneManager.LoadScene("Gameover_scene")). 상수 GAMEOVER_SCENE_NAME = 
+  "Gameover_scene" 단일 출처
+  - ResultUI.cs — 의도적으로 그대로 유지. Game.unity Canvas 에 잔존하는
+  컴포넌트는 panelRoot 등 필드 null → Validate 자동 실패 → 비활성. 무해. 깔끔히
+  정리하려면 파일+컴포넌트 삭제 가능
+
+  Gameover_scene 자동 배선
+  - GameOverUI 부착 + 3개 필드 와이어링 (gameOverScoreText / mainMenuButton /
+  quitButton)
+  - ⚠️ EventSystem 누락 감지 → 자동 추가 (없으면 버튼 클릭 무반응)
+  - Build Settings index 2 등록
+
+  검증 통과
+  - gameover_score.text='0' (HasResult=false 분기 정상)
+  - Mainmenu_button.onClick.Invoke() → mainmenu 씬 전환 확인
+
+  남은 작업 (M2 = 내일)
+
+  1. ⚠️ Build Settings index 1 정리 — Assets/Game.unity 루트 vs
+  Assets/Scenes/Game.unity canonical. 본 변경은 양쪽 공통이라 무영향이지만
+  깔끔히 정리 권장 (README.md §14-10-6 참조)
+  2. (선택) ResultUI.cs + Canvas 컴포넌트 정리 — 잔존 파일이 혼란스러우면 제거
+  3. JSON SaveSystem (Phase 8) — 8개 결정사항은 이전 답변에 정리됨
+
+  수동 end-to-end 검증 (mainmenu → 쇼트/풀 → 5/10프레임 완주 → Gameover_scene
+  자동 전환 → 점수 표시 → 메인메뉴 복귀) 확인 후 다음 작업 진행할까요?
+
+✻ Baked for 11m 28s
+
+※ recap: 볼링 게임 M2 마일스톤 마무리 중 — 결과화면을 별도 씬으로 분리하는 작업이 끝났고 자동 배선·Play 검증까지 통과했습니다. 다음은 mainmenu→Game→Gameover_scene 전체 흐름을 수동으로 끝까지 검증하는 단계입니다.
+
+> 네 좋습니다 지금까지 진행한 내용을 모두 정리해주세요                          
+
+● 본 세션 작업 정리
+
+  시작 시점 상태
+
+  - ResultUI 단계 1 (골격) 완료된 상태
+  - M2 마일스톤 임박 (2026-06-20)
+  - Assets/Game.unity 루트 중복 + Build Settings 불일치 미해결
+
+  1. ResultUI 단계 2 → 5 완료 (오버레이 패널 구조, 최초 구현)
+
+  코드 변경 — Assets/Scripts/UI/ResultUI.cs
+
+  ┌──────┬──────────────────────────────────────────────────────────────────┐
+  │ 단계 │                            추가/변경                             │
+  ├──────┼──────────────────────────────────────────────────────────────────┤
+  │ 단계 │ Start() (Validate → 이벤트 2개 구독 → 버튼 2개 listener →        │
+  │  2   │ HidePanel → 로그), OnDestroy() (대칭 해제), Validate() (필드 7개 │
+  │      │  null 체크)                                                      │
+  ├──────┼──────────────────────────────────────────────────────────────────┤
+  │      │ 상수 COUNT_FORMAT = "{0}회", MAIN_MENU_SCENE_NAME = "mainmenu".  │
+  │ 단계 │ 헬퍼 CountStrikes / CountSpares (Frame.IsStrike/IsSpare 카운트)  │
+  │  3   │ / FormatCount / ShowPanel / HidePanel. 단계 2 의                 │
+  │      │ panelRoot.SetActive(false) 직접 호출을 HidePanel() 로 리팩토링   │
+  ├──────┼──────────────────────────────────────────────────────────────────┤
+  │      │ HandleGameInitialized (HidePanel) / HandleGameOver               │
+  │ 단계 │ (점수·스트라이크·스페어 갱신 + ShowPanel) / OnRestartClicked     │
+  │  4   │ (GameManager.RestartGame) / OnMainMenuClicked                    │
+  │      │ (SceneManager.LoadScene("mainmenu"))                             │
+  ├──────┼──────────────────────────────────────────────────────────────────┤
+  │ 단계 │ MCP execute_code 로 Assets/Scenes/Game.unity Canvas 에           │
+  │  5   │ ResultPanel + 자식 5개 자동 배선 + ResultUI 컴포넌트 추가 + 7개  │
+  │      │ 필드 리플렉션 와이어링                                           │
+  └──────┴──────────────────────────────────────────────────────────────────┘
+
+  씬 배선 — Game.unity Canvas 하위 ResultPanel
+
+  Canvas (ResultUI 부착)
+  └── ResultPanel  (panelRoot, (0,0) size (900,700), 검은 알파 0.85)
+      ├── final_score      (TMP, (0,200) size (800,160) fontSize 140)
+      ├── strike_count     (TMP, (0,40)  size (800,80)  fontSize 48)
+      ├── spare_count      (TMP, (0,-40) size (800,80)  fontSize 48)
+      ├── restart_button   (Button, (-180,-200) size (320,110) 파란색)
+      └── main_menu_button (Button, ( 180,-200) size (320,110) 파란색)
+
+  폰트는 씬 내 기존 TMP 에서 NotoSansKR-Black SDF 자동 차용.
+
+  검증
+
+  Editor Play [Result] 초기화 완료 — FrameManager 이벤트 + 버튼 콜백 구독 +
+  [Result] 게임 초기화 — 패널 숨김 로그 통과, 에러 0.
+
+  2. 볼링공 리셋 위치 어긋남 수정
+
+  진단 — 5가지 가설 중 가설 1 직격
+
+  원인: BallAimer.Update 의 1줄 transform.position = new Vector3(x, 
+  transform.position.y, ballStartZ) —
+  - Z 를 ballStartZ = 0.5f 로 강제 스냅 (spawnPoint.z 무관)
+  - Y 를 "그 순간의 transform.position.y" 차용 → Rigidbody Interpolation 잔여값
+  락 위험
+
+  ResetToStartPosition 내부 동기 검증은 통과하지만, 다음 프레임 BallAimer.Update
+   가 Y/Z 를 다시 씀.
+
+  수정 — Assets/Scripts/Gameplay/BallAimer.cs
+
+  - Awake() 신규 — BowlingBall.Awake 동일 패턴으로 BallSpawnPoint Transform 1회
+  캐싱
+  - Update() Y/Z 산정 — spawnPoint 있으면 spawnPoint.position.y/z 사용, 없으면
+  종전 fallback
+  - ballStartZ 인스펙터 필드는 fallback 용으로 유지
+
+  검증
+
+  사용자 Play — 쇼트/풀 모드 모두 spawn 위치 정확. 가설 2 (interpolation 잔존) /
+   3 (catch-up FixedUpdate) 는 본 수정만으로 잔존 증상 없어 추가 적용 보류.
+
+  3. JSON SaveSystem 사전 검토 (8개 결정사항 추천안 제시)
+
+  ┌─────┬───────────┬────────────────────────────────────────┐
+  │  #  │   항목    │                  추천                  │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 1   │ 직렬화    │ JsonUtility                            │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 2   │ 저장 시점 │ HandleGameOver 즉시                    │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 3   │ 상한      │ Top 5 per mode                         │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 4   │ 정렬      │ 점수 내림차순, 동점 시 playedAt 최신순 │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 5   │ 첫 실행   │ 빈 SaveData 반환                       │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 6   │ 실패 정책 │ Debug.LogError + 진행 계속             │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 7   │ 백업      │ 단일 파일                              │
+  ├─────┼───────────┼────────────────────────────────────────┤
+  │ 8   │ 버전      │ version=1 필드                         │
+  └─────┴───────────┴────────────────────────────────────────┘
+
+  → 사용자 결정으로 구현 보류. 결과 화면 구조 변경 (다음 항목) 으로 전환.
+
+  4. 결과 화면 구조 변경 — 오버레이 → 별도 씬
+
+  동기
+
+  사용자가 Gameover_scene.unity 신규 생성 + Game.unity 의 ResultPanel 삭제. 씬
+  단위 분리가 더 명확하다고 판단.
+
+  신규 파일
+
+  파일: Assets/Scripts/Core/GameResultHolder.cs
+  역할: DontDestroyOnLoad 싱글턴. GameModeSelector 패턴 답습. LastScore /
+    LastModeName / HasResult 노출. Lazy Instance getter (Gameover_scene 단독
+  Play
+     호환)
+  ────────────────────────────────────────
+  파일: Assets/Scripts/UI/GameOverUI.cs
+  역할: Gameover_scene Canvas 부착. Start 에서
+    GameResultHolder.Instance.LastScore 읽어 gameover_score 갱신. 메인메뉴 버튼
+  →
+     LoadScene("mainmenu"), Quit 버튼 → Application.Quit() (Editor 에서는
+    EditorApplication.isPlaying = false)
+
+  기존 파일 수정 — Assets/Scripts/Core/GameManager.cs
+
+  - using UnityEngine.SceneManagement; 추가
+  - OnEnterGameOver() 에 2줄: GameResultHolder.Instance.SetResult(score, 
+  ruleConfig.ModeName) + SceneManager.LoadScene("Gameover_scene")
+  - 상수 GAMEOVER_SCENE_NAME = "Gameover_scene" 단일 출처
+
+  Gameover_scene 자동 배선 (MCP execute_code)
+
+  1. Canvas 발견 + 자식 3개 (Mainmenu_button / Quit_button / gameover_score)
+  매핑
+  2. EventSystem 누락 감지 → 자동 추가 (EventSystem + InputSystemUIInputModule)
+  — 없으면 버튼 클릭 무반응
+  3. GameOverUI 컴포넌트 Canvas 에 추가 + 3 필드 리플렉션 와이어링
+  4. 씬 저장
+  5. Build Settings index 2 등록
+
+  검증
+
+  - Gameover_scene 단독 Play → gameover_score.text = "0" (HasResult=false 분기
+  정상)
+  - Mainmenu_button.onClick.Invoke() → 씬 카운트 1, active=mainmenu (메인메뉴
+  전환 확인)
+  - Quit 버튼은 Editor 종료 유발해 자동 검증 생략
+
+  5. ResultUI 운명
+
+  - 코드 파일 Assets/Scripts/UI/ResultUI.cs 의도적으로 유지 — 추후 오버레이 복귀
+   옵션 보존
+  - Game.unity Canvas 의 ResultUI 컴포넌트 잔존 가능 — panelRoot 등 필드 null →
+  Validate 자동 실패 → enabled=false → 무해
+  - 정리 원하면 파일+컴포넌트 삭제 가능 (선택)
+
+  6. 누적 Build Settings
+
+  index: 0
+  씬: Assets/Scenes/mainmenu.unity
+  비고: 시작 씬
+  ────────────────────────────────────────
+  index: 1
+  씬: ⚠️ Assets/Game.unity (루트, untracked)
+  비고: 의도는 Assets/Scenes/Game.unity (canonical). 본 변경은 양쪽 공통이라
+    무영향이지만 정리 권장
+  ────────────────────────────────────────
+  index: 2
+  씬: Assets/Scenes/Gameover_scene.unity
+  비고: 신규, 본 세션 등록
+
+  7. 문서 갱신
+
+  문서: README.md
+  변경: §14 헤더 날짜 2026-06-19, §14-1 6-c 항목 ✅ 갱신 (구조 변경 반영), §14-2
+
+    컴포넌트 카탈로그 갱신, §14-3 씬 상태 (ResultPanel 삭제 + Gameover_scene
+    추가), §14-5 Build Settings index 2, §14-10 신설 (ResultUI 오버레이 단계 2~5
+
+    상세), §14-10-6 Build Settings 진단·복구, §14-11 신설 (BallAimer 수정),
+    §14-12 신설 (결과 화면 별도 씬 전환), §14-13 참고 문서 (renumber), 풋터 날짜
+  ────────────────────────────────────────
+  문서: NEXT_SESSION.md
+  변경: 전면 재작성 → 본 세션 산출물 반영 + 다음 우선순위 재배치 (Build Settings
+
+    정리 / JSON SaveSystem)
+
+  8. 누적 산출물 (본 세션 신규/수정 파일)
+
+  신규 (5개):
+  - Assets/Scripts/Core/GameResultHolder.cs
+  - Assets/Scripts/UI/GameOverUI.cs
+  - 추가로 (이미 user 가) Assets/Scenes/Gameover_scene.unity 신규 생성
+
+  수정 (5개):
+  - Assets/Scripts/UI/ResultUI.cs (단계 1 → 5 전체 구현 후 obsolete 처리)
+  - Assets/Scripts/Gameplay/BallAimer.cs (Awake 추가 + Update 수정)
+  - Assets/Scripts/Core/GameManager.cs (using 추가 + OnEnterGameOver 변경)
+  - Assets/Scenes/Game.unity (ResultPanel 추가 후 user 가 삭제)
+  - Assets/Scenes/Gameover_scene.unity (자동 배선)
+  - EditorBuildSettings.asset (index 2 등록)
+  - README.md, NEXT_SESSION.md (대량 갱신)
+
+  9. 남은 critical path (M2 = 내일)
+
+  1. ⚠️ Build Settings index 1 정리 — Assets/Game.unity 루트 ↔
+  Assets/Scenes/Game.unity canonical 통합. README §14-10-6 절차 참조
+  2. 수동 end-to-end 검증 — mainmenu → 쇼트/풀 → 5/10프레임 완주 →
+  OnEnterGameOver → Gameover_scene 자동 전환 → 점수 표시 → 메인메뉴/Quit 동작
+  3. JSON SaveSystem (Phase 8) — 8개 결정사항 답안 모두 정리됨, 시작만 하면 됨
+  4. (선택) ResultUI.cs + 잔존 컴포넌트 정리, FrameManagerTests 리팩토링,
+  10프레임 동적 점수판, 튜토리얼
+
+✻ Cogitated for 1m 17s
+
+> /code-review                                                                  
+
+● /code-review 가 등록된 스킬에 없어 인라인으로 본 세션에서 변경된 코드를 직접
+  리뷰하겠습니다. 새 파일 2개 + 기존 파일 수정 2개에 집중합니다.
+
+  Read 4 files (ctrl+o to expand)
+
+● 코드 리뷰 — 본 세션 변경
+
+  등급 표시
+
+  - 🔴 Critical (실제 버그/잠재 NRE)
+  - 🟡 권장 (견고성/일관성 개선)
+  - 🔵 스타일 (가독성/관습)
+  - ✅ 잘된 점 (재사용 가치 있는 패턴)
+
+  ---
+  GameResultHolder.cs 신규
+
+  🔵 로그 prefix 충돌 위험
+
+  [ResultHolder] 는 단일 출처라 안전. 단, 본인은 무관하지만 아래 GameOverUI 와
+  GameManager 가 동일 [GameOver] 를 공유 — 그 쪽 코멘트 참조.
+
+  🟡 score 범위 검증 누락
+
+  public void SetResult(int score, string modeName)
+  {
+      LastScore = score;   // 음수도 그대로 저장
+
+  현재는 frameManager.GetTotalScore() 만 호출하므로 항상 ≥0 보장. 그러나
+  외부에서 잘못 호출하면 LastScore = -1 같은 값도 통과. defense in depth
+  차원에서 Mathf.Max(0, score) 1줄 추가 또는 음수면 LogWarning. 우선순위 낮음.
+
+  🟡 modeName 빈 문자열 silent fallback
+
+  LastModeName = modeName ?? string.Empty;
+
+  호출자 측 버그가 silently 흡수됨. 빈 문자열 시 LogWarning 1줄이 디버깅 도움.
+  (현재 호출자 GameManager 는 절대 null 안 줌이라 실용적 영향 없음)
+
+  ✅ Lazy Instance 패턴이 우수
+
+  public static GameResultHolder Instance
+  {
+      get { if (instance != null) return instance;
+            var existing = FindFirstObjectByType<GameResultHolder>();
+            if (existing != null) { instance = existing; return instance; }
+            var go = new GameObject("GameResultHolder");
+            ... }
+  }
+
+  GameModeSelector 의 단순 싱글턴보다 견고. Gameover_scene 단독 Play 시 자동
+  GameObject 생성 → 검증 부담 0. 다음에 유사 싱글턴 추가 시 본 패턴 답습 권장.
+
+  ---
+  GameOverUI.cs 신규
+
+  🔴 로그 prefix [GameOver] 가 GameManager.OnEnterGameOver 와 충돌
+
+  GameManager.cs:186 — Debug.Log($"[GameOver] 게임 종료! 모드: ...")
+  GameOverUI.cs:50,56,79,85 — Debug.Log/LogWarning("[GameOver] ...")
+
+  두 클래스가 동일 [GameOver] prefix 사용. 콘솔에서 어느 쪽이 찍힌 로그인지 구별
+   불가. ScoreboardUI 가 [Scoreboard], ResultUI 가 [Result] 였던 패턴과 어긋남.
+
+  권장: GameOverUI 의 prefix 를 [GameOverUI] 로 변경 (또는 [GameOver Scene]).
+  GameManager 쪽은 동작 로그 (게임 종료 시점 자체) 이므로 그대로 유지하는 게
+  자연스러움.
+
+  🟡 MAIN_MENU_SCENE_NAME 중복 정의
+
+  ResultUI.cs:51 에도 동일 상수 MAIN_MENU_SCENE_NAME = "mainmenu" 가 있음. 이제
+  MainMenuUI 어딘가도 비슷한 게 있을 가능성. 향후 씬 이름 바뀌면 여러 곳 수정
+  필요.
+
+  옵션 A (가벼움): 그대로 둠. 두 곳 수정만 하면 됨.
+  옵션 B (중간): 신규 Assets/Scripts/Core/SceneNames.cs static class — public 
+  const string Mainmenu = "mainmenu", Game = "Game", GameoverScene = 
+  "Gameover_scene". 모든 LoadScene 호출이 이걸 참조.
+
+  지금 단계에선 옵션 A 가 합리적. JSON SaveSystem 작업 시 씬 이름 더 안 늘어남.
+
+  🔵 OnQuitClicked 의 #if UNITY_EDITOR 분기는 표준 패턴이라 OK
+
+  대신 UnityEditor 네임스페이스를 #if 안에서만 참조하는 게 빌드 깨짐 방지에
+  안전. 현재 코드는 그렇게 되어 있음. ✅
+
+  ✅ HasResult==false 시 graceful degrade
+
+  if (!holder.HasResult)
+  {
+      Debug.LogWarning("[GameOver] GameResultHolder.HasResult == false ...");
+      gameOverScoreText.text = "0";
+  }
+
+  Gameover_scene 단독 Play 가 깨지지 않음 + 개발자 인지 가능한 경고. 좋음.
+
+  🟡 빌드 환경에서 Application.Quit() 가 PC Standalone 에서만 즉시 종료
+
+  WebGL 빌드 검토 시 Application.Quit() 는 무시됨. 본 프로젝트는 PC Standalone
+  만 타겟이므로 현재는 문제 없음. README §11 의 WebGL 확장 검토 시 본 함수 동작
+  재검증 필요.
+
+  ---
+  BallAimer.cs 수정
+
+  🟡 GameObject.Find("BallSpawnPoint") 가 비활성 객체 미검색
+
+  GameObject.Find 는 활성 GameObject 만 검색. BallSpawnPoint 의 부모가
+  비활성이면 캐시 null. 현재는 활성이라 무문제지만, 누군가 hierarchy 재구성 시
+  silently 깨질 수 있음.
+
+  옵션 A: 그대로. 워닝 로그가 즉시 표면화시킴.
+  옵션 B: [SerializeField] Transform spawnPoint; 로 인스펙터 직접 할당 — 비활성
+  객체도 참조 가능 + GameObject.Find 의존 제거. 단 BowlingBall.cs 도 같이 바꿔야
+   일관성 유지.
+
+  옵션 B 가 장기적으로 깔끔하지만 지금 변경 강제 아님.
+
+  ✅ BowlingBall.Awake 패턴 답습이 정확
+
+  var spawnGo = GameObject.Find("BallSpawnPoint");
+  spawnPoint = spawnGo != null ? spawnGo.transform : null;
+  if (spawnPoint == null) Debug.LogWarning("...");
+
+  BowlingBall.cs:32-35 와 동일 구조. 두 클래스가 동일 스폰포인트를 참조하므로
+  동일 캐싱 전략을 쓰는 게 맞음.
+
+  🔵 ballStartZ 인스펙터 필드가 fallback 전용으로 약화됨
+
+  기존: 의도된 Z 위치 단일 출처. 지금: spawnPoint 없을 때만 사용. 인스펙터에서
+  값 변경해도 정상 흐름에 영향 없음 — 개발자 혼란 가능.
+
+  옵션: Tooltip 강화는 이미 적용 ("BallSpawnPoint 미발견 시 사용할 fallback 
+  Z."). 더 명확히 하려면 필드 이름 ballStartZFallback 로 rename. 우선순위 낮음.
+
+  🟡 spawnPoint 가 런타임에 위치 변경되면 매 프레임 추적
+
+  spawnPoint.position.y/z 를 매 Update 마다 읽음. 만약 BallSpawnPoint 가 부모와
+  함께 움직이는 구조라면 ball 이 따라감. 현재 정적 배치라 문제 없지만, 카메라
+  흔들림 효과 등에서 spawn 부모가 움직이면 의도 외 동작 가능. 일반적 케이스는
+  아님.
+
+  ---
+  GameManager.OnEnterGameOver 수정
+
+  🟡 LoadScene 시점에 일부 컴포넌트 중간 상태로 남음
+
+  settleDetector.StopDetection();
+  int score = frameManager.GetTotalScore();
+  ...
+  GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName);
+  SceneManager.LoadScene(GAMEOVER_SCENE_NAME);
+
+  SceneManager.LoadScene 은 동기 호출이지만 실제 unload/load 는 프레임 끝에서.
+  그 사이에:
+  - OnGameOver 이벤트 이미 발행됨 → ScoreboardUI 가 gameover_score 갱신 (현재
+  Game.unity 의 잔존 코드. 시각적으로 안 보이지만 1프레임 동안 실행)
+  - 본 메서드 return 후 GameManager 의 나머지 update 사이클 1프레임 더 돔
+
+  대부분 무해. 단 gameover_score TMP 갱신은 이제 의미 없는 작업 —
+  ScoreboardUI.HandleGameOver 의 해당 줄을 향후 제거 가능 (그 자체는 본 세션
+  범위 밖).
+
+  ✅ 상수 단일 출처
+
+  private const string GAMEOVER_SCENE_NAME = "Gameover_scene";
+
+  씬 이름 magic string 회피. README 의 컨벤션 일치.
+
+  🔵 perfect 변수 계산 후 LoadScene 직전 로그만 사용
+
+  int score   = frameManager.GetTotalScore();
+  int perfect = ruleConfig.GetPerfectScore();
+  Debug.Log($"[GameOver] ... 퍼펙트 대비: {score}/{perfect}");
+
+  perfect 가 디버그 로그 외 쓰이는 곳 없음. 향후 결과 화면이 퍼펙트 강조
+  (perfect == score → "퍼펙트!" 표시) 를 띄우려면 GameResultHolder.SetResult 가
+  perfect 도 받아야 함. 현 구조에서 GameOverUI 가 별 강조 못 함 — 점수만 가짐.
+
+  향후 확장 시: SetResult(score, perfect, modeName) 또는 SetResult(GameRecord 
+  record) 로 시그니처 확장 검토. 지금은 YAGNI.
+
+  ---
+  횡단 관찰
+
+  🟡 ResultUI.cs 가 obsolete 상태로 잔존
+
+  - Game.unity Canvas 의 컴포넌트 자체는 Validate 실패로 자동 비활성 → 무해
+  - 그러나 코드 파일 + 컴포넌트가 남아 있어서 "어떤 게 살아있는지" 가 코드만
+  봐서는 불명확
+  - 또한 FrameManager.OnGameOver 이벤트 구독을 ResultUI 가 했었는데, Validate
+  실패하면 구독 안 함 → 누가 OnGameOver 를 듣는지 = ScoreboardUI 만
+
+  권장:
+  1. (최소) ResultUI.cs 클래스 선언부에 // OBSOLETE 2026-06-19: 결과 화면이 별도
+   씬으로 이전됨 (Gameover_scene + GameOverUI). 본 파일은 ... 주석 1단락 추가
+  2. (적극) 파일 삭제 + Canvas 컴포넌트 제거 + Assets/Scenes/Game.unity Canvas
+  자식 정리
+
+  옵션 2 가 본 작업의 자연스러운 마무리. 사용자가 보존 의사를 보였으므로 옵션 1
+  으로 절충 가능.
+
+  🟡 ScoreboardUI.gameOverScoreText 도 사실상 obsolete
+
+  씬이 즉시 전환되므로 사용자 눈에 안 보임. ScoreboardUI 안에서
+  gameOverScoreText 관련 코드 (Validate / HandleGameInitialized /
+  HandleGameOver) 를 정리 가능. 다만 cosmetic.
+
+  ✅ DontDestroyOnLoad 두 싱글턴 (GameModeSelector + GameResultHolder) 패턴 통일
+
+  쇼트/풀 모드 선택 → 게임 진행 → 결과 → 메인메뉴 흐름에서 양쪽 모두 같은 방식.
+  신규 추가 시 (예: SettingsHolder 음량/색약 모드 등) 같은 패턴 답습 가능.
+
+  ✅ Validate 패턴 일관성
+
+  ScoreboardUI, ResultUI, MainMenuUI, GameOverUI 모두:
+  private void Start() { if (!Validate()) { enabled = false; return; } ... }
+  private bool Validate() { ... null 체크 + LogError + return false ... }
+
+  신규 UI 컴포넌트 추가 시 본 4단계 패턴이 사실상 프로젝트 컨벤션으로 자리잡음.
+  AI_PROMPT_REFERENCE.md 에 명시 권장.
+
+  ---
+  우선순위별 액션 권장
+
+  ┌──────────────┬─────────────────────────────────────────┬────────────────┐
+  │   우선순위   │                  액션                   │  예상 작업량   │
+  ├──────────────┼─────────────────────────────────────────┼────────────────┤
+  │ 1 (Critical  │ GameOverUI 의 로그 prefix [GameOver] →  │                │
+  │ 외 가장      │ [GameOverUI] 변경                       │ 4줄 sed        │
+  │ 가치)        │                                         │                │
+  ├──────────────┼─────────────────────────────────────────┼────────────────┤
+  │ 2            │ ResultUI.cs 파일 헤더에 OBSOLETE 주석   │ 1단락          │
+  │              │ 1단락 추가 (또는 삭제)                  │                │
+  ├──────────────┼─────────────────────────────────────────┼────────────────┤
+  │ 3            │ GameResultHolder.SetResult 에 score     │ 2줄            │
+  │              │ 음수 가드 + LogWarning                  │                │
+  ├──────────────┼─────────────────────────────────────────┼────────────────┤
+  │              │ (향후 확장 시) BallAimer.spawnPoint 를  │                │
+  │ 4            │ SerializeField 로 전환 + BowlingBall 도 │ 두 파일 각 5줄 │
+  │              │  동일 적용                              │                │
+  ├──────────────┼─────────────────────────────────────────┼────────────────┤
+  │              │                                         │ 신규 1파일 + 3 │
+  │ 5            │ SceneNames static class 도입 (옵션 B)   │  LoadScene     │
+  │              │                                         │ 호출 갱신      │
+  └──────────────┴─────────────────────────────────────────┴────────────────┘
+
+  전반적으로 코드 품질은 양호. Critical 버그는 없음. 1번 (prefix 충돌) 만 즉시
+  처리하면 운영 중 로그 가독성이 확보됩니다. 적용할까요?
+
+✻ Cooked for 2m 57s
+
+> 네 적용 해주시고 바로 github에 커밋 하고 푸쉬까지 완료 해주세요               
+
+● [GameOver] → [GameOverUI] 적용 후 커밋·푸시까지 진행합니다.
+
+● Update(Assets\Scripts\UI\GameOverUI.cs)
+  ⎿  Added 7 lines, removed 7 lines
+      47              if (!holder.HasResult)
+      48              {
+      49                  // Gameover_scene 단독 Play / 결과 없는 직접 진
+          입 — 기본 0 으로 표시 + 경고.
+      50 -                Debug.LogWarning("[GameOver] GameResultHolder.H
+         -asResult == false — 결과 없이 직접 진입한 것으로 보임. 점수 0  
+         -표시.");                                                       
+      50 +                Debug.LogWarning("[GameOverUI] GameResultHolder
+         +.HasResult == false — 결과 없이 직접 진입한 것으로 보임. 점수 0
+         + 표시.");                                                      
+      51                  gameOverScoreText.text = "0";
+      52              }
+      53              else
+      54              {
+      55                  gameOverScoreText.text = holder.LastScore.ToStr
+          ing();
+      56 -                Debug.Log($"[GameOver] 초기화 완료 — 점수 {hold
+         -er.LastScore} 표시 (모드: {holder.LastModeName})");            
+      56 +                Debug.Log($"[GameOverUI] 초기화 완료 — 점수 {ho
+         +lder.LastScore} 표시 (모드: {holder.LastModeName})");          
+      57              }
+      58          }
+      59  
+     ...
+      66          private bool Validate()
+      67          {
+      68              if (gameOverScoreText == null)
+      69 -            { Debug.LogError("[GameOver] gameOverScoreText 참조
+         - 누락"); return false; }                                       
+      69 +            { Debug.LogError("[GameOverUI] gameOverScoreText 참
+         +조 누락"); return false; }                                     
+      70              if (mainMenuButton == null)
+      71 -            { Debug.LogError("[GameOver] mainMenuButton 참조 누
+         -락"); return false; }                                          
+      71 +            { Debug.LogError("[GameOverUI] mainMenuButton 참조 
+         +누락"); return false; }                                        
+      72              if (quitButton == null)
+      73 -            { Debug.LogError("[GameOver] quitButton 참조 누락")
+         -; return false; }                                              
+      73 +            { Debug.LogError("[GameOverUI] quitButton 참조 누락
+         +"); return false; }                                            
+      74              return true;
+      75          }
+      76  
+      77          private void OnMainMenuClicked()
+      78          {
+      79 -            Debug.Log($"[GameOver] 메인메뉴 버튼 클릭 — SceneMa
+         -nager.LoadScene(\"{MAIN_MENU_SCENE_NAME}\")");                 
+      79 +            Debug.Log($"[GameOverUI] 메인메뉴 버튼 클릭 — Scene
+         +Manager.LoadScene(\"{MAIN_MENU_SCENE_NAME}\")");               
+      80              SceneManager.LoadScene(MAIN_MENU_SCENE_NAME);
+      81          }
+      82  
+      83          private void OnQuitClicked()
+      84          {
+      85 -            Debug.Log("[GameOver] Quit 버튼 클릭 — 애플리케이션
+         - 종료");                                                       
+      85 +            Debug.Log("[GameOverUI] Quit 버튼 클릭 — 애플리케이
+         +션 종료");                                                     
+      86  #if UNITY_EDITOR
+      87              UnityEditor.EditorApplication.isPlaying = false;
+      88  #else
+
+  Called UnityMCP 2 times (ctrl+o to expand)
+
+● Bash(git status)
+  ⎿  On branch main
+     Your branch is up to date with 'origin/main'.
+     … +22 lines (ctrl+o to expand)
+
+● Bash(git log --oneline -5)
+  ⎿  41de4cf chore(scene): persist Unity post-merge save (TMP serialization
+      normalize + BackWall(6))
+     13dcf32 docs: bump README §14 and AI_PROMPT_REFERENCE footer to 2026-0
+     … +5 lines (ctrl+o to expand)
+
+● 컴파일 클린. 커밋 전 .claude/settings.local.json 변경 내용 한 번 확인 (민감
+  정보 없는지) 후 진행합니다.
+
+● Bash(git diff .claude/settings.local.json)  ⎿  warning: in the working copy of '.claude/settings.local.json', LF will
+      be replaced by CRLF the next time Git touches it
+     diff --git a/.claude/settings.local.json b/.claude/settings.local.json
+     … +20 lines (ctrl+o to expand)
+
+● 권한 grant 항목만 — 안전. 모든 파일 staged + commit + push 합니다.
+
+● Bash(git add Assets/Scripts/Core/GameManager.cs
+      Assets/Scripts/Core/GameResultHolder.cs
+      Assets/Scripts/Core/GameResultHolder.cs.meta
+      Assets/Scripts/Gameplay/BallAime…)
+  ⎿  warning: in the working copy of '.claude/settings.local.json', LF will
+      be replaced by CRLF the next time Git touches it
+     warning: in the working copy of 'Assets/Scenes/Game.unity', LF will be
+     … +24 lines (ctrl+o to expand)
+
+● Bash(git status)
+  ⎿  On branch main
+     Your branch is up to date with 'origin/main'.
+     … +18 lines (ctrl+o to expand)
+
+● Bash(git commit -m "$(cat <<'EOF'
+      feat: scene-based gameover flow + BallAimer reset fix + ResultUI 2~5…)
+  ⎿  [main b8fbbfb] feat: scene-based gameover flow + BallAimer reset fix +
+      ResultUI 2~5
+      17 files changed, 8425 insertions(+), 336 deletions(-)
+     … +8 lines (ctrl+o to expand)
+
+● Bash(git push origin main)
+  ⎿  Running in the background (↓ to manage)
+
+● 푸시 진행 중 — 완료 알림 대기합니다.
+
+✻ Cogitated for 4m 10s
+
+● Background command "Push commit to origin/main" completed (exit code 0)
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(git status && git log --oneline -3)
+  ⎿  On branch main
+     Your branch is up to date with 'origin/main'.
+     … +7 lines (ctrl+o to expand)
+
+● 푸시 완료.
+
+  결과
+
+  - Commit: b8fbbfb — feat: scene-based gameover flow + BallAimer reset fix + 
+  ResultUI 2~5
+  - Push: 41de4cf..b8fbbfb  main -> main →
+  https://github.com/bm41878-spec/bowlling-game
+  - Working tree: clean
+  - 변경 통계: 17 files changed, 8425 insertions, 336 deletions
+
+  적용된 액션
+
+  - 코드 리뷰 #1 — GameOverUI 로그 prefix [GameOver] → [GameOverUI] (4곳)
+
+  미적용 액션 (다음 세션 후보)
+
+  - #2 ResultUI.cs OBSOLETE 주석 또는 파일 삭제
+  - #3 GameResultHolder.SetResult score 음수 가드
+  - #4 BallAimer.spawnPoint SerializeField 전환
+  - #5 SceneNames static class
+
+  M2 (2026-06-20) 까지 critical path 는 README §14-10-6 의 Assets/Game.unity ↔
+  Assets/Scenes/Game.unity 정리 + 수동 end-to-end 검증 입니다.
+
+✻ Brewed for 15s
+
+> /review                                                                       
+
+● PR 번호가 없어 먼저 열린 PR 목록을 확인합니다.
+
+● Bash(gh pr list)
+  ⎿  Error: Exit code 127
+     /usr/bin/bash: line 1: gh: command not found
+
+● gh 가 bash PATH 에 없음. PowerShell 로 재시도합니다.
+
+● PowerShell(gh pr list)
+  ⎿  Error: Exit code 1
+     gh : The term 'gh' is not recognized as the name of a cmdlet, fun
+     ction, script file, or operable program. Check the spelling of th
+     e name, or if a path was included, verify that the path is correc
+     t and try again.
+     At line:1 char:1
+     + gh pr list
+     + ~~
+         + CategoryInfo          : ObjectNotFound: (gh:String) [], Co 
+        mmandNotFoundException
+     … +1 line (ctrl+o to expand)
+
+● Bash(git remote -v && git branch -a)
+  ⎿  origin     https://github.com/bm41878-spec/bowlling-game.git (fetch)
+     origin     https://github.com/bm41878-spec/bowlling-game.git (push)
+     * main
+     … +4 lines (ctrl+o to expand)
+
+● gh (GitHub CLI) 가 시스템에 설치되어 있지 않아 /review 스킬의 표준 흐름 (gh pr
+   list → gh pr view → gh pr diff) 을 실행할 수 없습니다.
+
+  상황
+
+  - 원격: bm41878-spec/bowlling-game
+  - 방금 푸시 (b8fbbfb) 는 PR 없이 main 직접 푸시 — 검토 대상 PR 자체가 없음
+  - 또한 직전 메시지에서 이미 변경 코드 (GameResultHolder / GameOverUI /
+  BallAimer / GameManager) 에 대한 인라인 코드 리뷰를 완료한 상태
+
+  옵션
+
+  1. gh 설치 — winget install GitHub.cli 후 gh auth login → 다시 /review 호출
+  2. 푸시한 커밋 직접 리뷰 — b8fbbfb 의 diff 를 git 으로 분석 → 직전 인라인
+  리뷰와 거의 동일 결과 (중복)
+  3. PR 흐름으로 전환 — feature branch 만들고 PR 띄운 뒤 /review <PR번호> — M2
+  임박이라 비용 대비 이득 낮음
+  4. skip — 직전 인라인 리뷰가 동일 범위라 추가 가치 적음
+
+  gh 설치 후 향후 PR-기반 협업으로 가실 의향이면 옵션 1 추천. 지금 단순히 방금
+  푸시한 변경을 다시 점검하시고 싶다면 옵션 4 (생략) 가 합리적입니다. 어떻게
+  진행할까요?
+
+✻ Worked for 50s

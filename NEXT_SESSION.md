@@ -1,8 +1,8 @@
 # 다음 세션 재개 가이드
 
-> **작성일**: 2026-06-19 (이전: 2026-06-18 ResultUI 단계 2~5 완료)
+> **작성일**: 2026-06-19 (Phase 8 JSON SaveSystem 검증 완료 + Build Settings 정리 + 레인 비주얼 작업)
 > **목적**: 세션 간 컨텍스트 손실 없이 다음 우선순위를 이어가기 위한 단일 출처.
-> **선행 문서**: `README.md` §14 (특히 §14-10 ~ §14-12), `AI_PROMPT_REFERENCE.md` (컨벤션·구조)
+> **선행 문서**: `README.md` §14 (특히 §14-13 SaveSystem, §14-15 레인), `AI_PROMPT_REFERENCE.md` (컨벤션·구조)
 
 ---
 
@@ -10,205 +10,179 @@
 
 | 항목 | 값 |
 |---|---|
-| 직전 완료 작업 (2026-06-19) | **결과 화면 구조 변경** — 오버레이 패널 → 별도 씬 (`Gameover_scene` + `GameOverUI` + `GameResultHolder`). 자동 배선 + EventSystem 추가 + Build Settings index 2 등록 + Play 검증 통과. **BallAimer 리셋 위치 어긋남 수정** (가설 1 확정, Y/Z spawnPoint 차용) |
-| 다음 작업 우선순위 | 1. ⚠️ Build Settings / 씬 중복 정리 → 2. ResultUI.cs / Game.unity Canvas 의 ResultUI 컴포넌트 정리 (선택) → 3. JSON SaveSystem → 4. 10프레임 동적 점수판 / 튜토리얼 / 테스트 리팩토링 |
-| 현재 위치 | **우선순위 1 (Build Settings 복구) 착수 대기** |
-| M2 마일스톤 | 2026-06-20 — 1일 남음. 우선순위 1 만 critical path (결과 화면 자체는 완료) |
+| 직전 완료 작업 (2026-06-19) | ① **Phase 8 SaveSystem 검증 완료** — `.meta` 미생성 원인 진단 후 ImportAsset 으로 복구. Gameover_scene 에 `best_score`/`new_record` 노드 신규 생성·와이어링·씬 저장. 프로그램 검증 7+3 시나리오 PASS. ② **Build Settings 정리** — 루트 `Assets/Game.unity`(stale) 삭제, 인덱스 1을 canonical `Assets/Scenes/Game.unity` 로 교체. ③ **레인 비주얼 변경** (사용자 작업) — `Mat_Lane`을 머티리얼 변형으로 전환 + `Mat_Lane 1/2/3` 신규 + Game.unity 에 `Lane (1)~(7)` 인스턴스 추가 |
+| 다음 작업 우선순위 | 1. ✅ 수동 end-to-end 검증 (mainmenu → 쇼트/풀 완주 → Gameover 점수·최고·신기록 → save.json 생성) → 2. 10프레임 동적 점수판 (§14-6 6-b) → 3. 튜토리얼 화면 (§14-6 6-e) → 4. FrameManagerTests 리팩토링 |
+| 현재 위치 | **M2 마일스톤 단축 경로 모두 해결됨**. 잔여는 폴리싱 + UX 확장 |
+| M2 마일스톤 | 2026-06-20 — 1일 남음. critical path 모두 해소 |
 
 ---
 
-## 1. 어디까지 왔나 (누적 산출물)
+## 1. 이번 세션(2026-06-19) 산출물
 
-### 1-1. 이전 세션 산출물
+### 1-1. Phase 8 SaveSystem 검증 완료
 
-- 2026-05-23: `ScoreboardUI.cs` (단계 1~5)
-- 2026-06-05: BowlingBall 최적화·물리 안정성·UI 해상도 일관성
-- 2026-06-06: 메인메뉴 흐름 6단계 (mainmenu.unity + GameModeSelector + MainMenuUI + FullModeRule + Build Settings)
-- 2026-06-07: ResultUI 단계 1 (골격)
+**진단**: 디스크엔 `SaveSystem.cs` / `HighScoreService.cs` 가 존재하지만 `.meta` 파일이 누락되어 Unity 가 import 하지 않은 상태였음 (reflection 으로 타입 MISSING 확인). `SaveData.version` 필드, `GameResultHolder.LastBestScore`/`IsNewRecord`, `GameOverUI.bestScoreText`/`newRecordText` 모두 미반영.
 
-### 1-2. 직전 세션 산출물 (2026-06-18)
+**복구**: `AssetDatabase.ImportAsset(path, ForceUpdate)` 명시 호출 → `.meta` 자동 생성 (`bb0ab94f...`, `8b0a1092...`) → 재컴파일 → 7개 타입 모두 OK.
 
-**ResultUI 단계 2~5 완료** — 오버레이 패널 구조. 자세한 좌표·치수·수정 가이드는 `README.md` §14-10 참조.
+**Gameover_scene 노드 배선** — 멱등 `execute_code`:
+- `best_score` (TMP_Text, anchored (0, -65), size (700, 80), 폰트 60, 흰색, "최고 점수: 0")
+- `new_record` (TMP_Text, anchored (0, 90), size (700, 100), 폰트 80, 노란색 (1, 0.85, 0.2), "신기록!", 초기 비활성)
+- 폰트는 기존 `gameover_score` 의 `NotoSansKR-Black SDF` 차용
+- `GameOverUI.bestScoreText` / `newRecordText` 리플렉션 와이어링 + 씬 저장
 
-### 1-3. 본 세션 산출물 (2026-06-19)
+**프로그램 검증 (7+3 시나리오, 모두 PASS)**:
+1. 첫 실행 — `Load()` 가 빈 `SaveData(version=1)` 반환
+2. 신기록 — 쇼트 모드 첫 점수 58 → `IsNewRecord=true, BestScore=58`
+3. 비신기록 — 쇼트 30 → `IsNewRecord=false, BestScore=58` (직전 최고 유지)
+4. 모드 분리 — 쇼트 58 / 풀 100 독립 (`GetBestScore` 각각 정확)
+5. Fail-safe — 손상된 JSON 로드 시 예외 전파 없이 빈 데이터 반환
+6. 정렬 — `GetHighScores` 점수 내림차순 `[75, 58, 15]`
+7. Top 10 제한 — 15회 기록 후 모드당 10개로 trim
+   + Holder 데이터 흐름 — `Record → SetResult` 3 시나리오 (신기록/비신기록/갱신)
 
-**볼링공 리셋 위치 어긋남 수정** (`Assets/Scripts/Gameplay/BallAimer.cs`):
-- 가설 1 (`BallAimer` 의 Z=0.5 강제 스냅 + Y interpolation 잔여값 락) 직격
-- `BallSpawnPoint` Transform 을 `Awake` 에서 1회 캐싱 (BowlingBall.cs 와 동일 패턴)
-- `Update` 의 Y/Z 차용을 `spawnPoint.position.y`/`.z` 로 변경. 사용자 검증 완료
+**Play 모드 Gameover_scene 단독 검증**:
+- 5개 SerializeField 모두 정확한 컴포넌트와 와이어링
+- `gameover_score.text="0"` / `best_score.text="최고 점수: 0"` / `new_record.activeSelf=false` (HasResult=false 분기 정상)
+- 콘솔 에러 0
 
-**결과 화면 구조 변경** — 오버레이 → 별도 씬:
-- 신규 `Assets/Scripts/Core/GameResultHolder.cs` — DontDestroyOnLoad 싱글턴. `LastScore` / `LastModeName` / `HasResult` 노출. Lazy `Instance` getter (Gameover_scene 단독 Play 호환)
-- 신규 `Assets/Scripts/UI/GameOverUI.cs` — Gameover_scene Canvas 부착. `gameover_score` 표시 + 메인메뉴/Quit 버튼 콜백
-- `Assets/Scripts/Core/GameManager.cs` — `using UnityEngine.SceneManagement` 추가, `OnEnterGameOver` 에서 `GameResultHolder.SetResult` + `SceneManager.LoadScene("Gameover_scene")`
-- `Assets/Scenes/Gameover_scene.unity` 자동 배선 — Canvas 에 GameOverUI 부착 + 3 필드 와이어링 + EventSystem 추가 (누락 감지) + Build Settings index 2 등록
-- 검증: Gameover_scene 단독 Play → `gameover_score.text='0'` (HasResult=false 경로) → Mainmenu 버튼 click → mainmenu 씬 전환 확인
+### 1-2. Build Settings 정리
 
-### 1-4. 검증된 시퀀스 (2026-06-19)
+**문제**: `EditorBuildSettings.asset` 의 index 1 이 `Assets/Game.unity` (루트 중복, 2026-06-07 자) 를 가리키고 있었음. canonical 위치는 `Assets/Scenes/Game.unity` (오늘 세션 작업 + Phase 8 후크 + BallAimer 수정 포함).
 
-**Game 씬 단독 Play** (BallAimer 수정 후):
+**조치** — 옵션 A 적용 (canonical 유지):
+1. `manage_build action="scenes"` 로 인덱스 갱신 (0=mainmenu, 1=Scenes/Game, 2=Gameover_scene)
+2. `AssetDatabase.SaveAssets()` + `SetDirty` 로 디스크 저장 강제
+3. `manage_asset action="delete" path="Assets/Game.unity"` — 루트 중복 + `.meta` 동시 삭제
+
+**검증**:
+- `EditorBuildSettings.asset` 디스크 반영 확인 (index 1 GUID `870c14cb56bcc3b4aa6564dad56854fe`)
+- `SceneManager.LoadScene("Game")` → `Assets/Scenes/Game.unity` 로 해석됨
+- `MainMenuUI.gameSceneName = "Game"` 매핑 정상
+
+**git working tree 결과**:
 ```
-[Scoreboard] / [FrameManager] / [GameManager BeginGame] / [PinManager] / [State] AimingPosition
-... 사용자 검증 — 쇼트/풀 모드 양쪽 공 리셋 정확
+D  Assets/Game.unity
+D  Assets/Game.unity.meta
+M  ProjectSettings/EditorBuildSettings.asset
 ```
 
-**Gameover_scene 단독 Play**:
-```
-gameover_score.text='0' (HasResult=false 경로)
-Mainmenu_button.onClick.Invoke() → 씬 카운트 1, active=mainmenu
-```
+### 1-3. 레인 비주얼 변경 (사용자 작업)
 
-**미검증 (수동):**
-- 전체 흐름 mainmenu → Game → 5프레임 완주 → OnEnterGameOver → Gameover_scene 자동 전환 → 점수 표시
-- Quit 버튼 — Editor 에서는 Play 종료 (자동 검증 시 Editor 정지 유발), 실제 빌드/플레이 시 확인 권장
+**머티리얼 (4종, 모두 매트 단색 — Metallic 0, Smoothness 0.5)**:
+
+| 파일 | 상태 | RGB(255) | 색상 | 구조 |
+|---|---|---|---|---|
+| `Mat_Lane.mat` | 수정 | (151, 200, 122) | 🟢 연두/세이지 | **`Mat_Lane 1` 의 변형(variant)** — 색만 오버라이드 |
+| `Mat_Lane 1.mat` | 신규 | (200, 193, 122) | 🟡 베이지/카키 | base material (다른 3개의 부모 잠재 사용) |
+| `Mat_Lane 2.mat` | 신규 | (214, 115, 102) | 🔴 살구/오렌지 | standalone |
+| `Mat_Lane 3.mat` | 신규 | (200, 169, 122) | 🟤 황토 | standalone (씬 미사용) |
+
+**Game.unity 변경**:
+- Lane GameObject: 1개 → 6개로 분할 (`Lane`, `Lane (1)`, `Lane (2)`, `Lane (3)`, `Lane (5)`, `Lane (7)`)
+- 머티리얼 분포 (씬 내 참조): Mat_Lane×1, Mat_Lane 1×2, Mat_Lane 2×2, Mat_Lane 3×0
+- diff 크기: `+620 / -136 lines`
+
+**의도(추정)**: 단일 회색 톤이던 레인을 다색 구간으로 분할하여 시각적 구분 강화. 머티리얼 변형(Material Variant) 패턴 도입으로 공유 속성(Smoothness/Bump 등) 일괄 조정 가능.
 
 ---
 
-## 2. 우선순위 1 — Build Settings / 씬 중복 정리 ⚠️
+## 2. 다음 작업 우선순위 1 — 수동 end-to-end 검증
 
-### 2-1. 문제 진단
+이번 세션의 모든 변경이 실제 게임 흐름에서 동작하는지 사용자 직접 플레이로 확인.
 
-세션 종료 시점 점검에서 발견:
+### 2-1. 검증 시나리오
 
-| 항목 | 현재 상태 |
+| 단계 | 기대 결과 |
 |---|---|
-| `Assets/Game.unity` (루트) | **untracked 신규 파일** — 누군가 씬을 루트로 복제 저장 |
-| `Assets/Scenes/Game.unity` (canonical) | 정상. **본 세션 ResultUI 배선이 들어간 곳** |
-| `EditorBuildSettings.asset` | modified — index 1 이 `Assets/Game.unity` (루트) 를 가리킴 |
+| mainmenu → 쇼트 또는 풀 버튼 클릭 | `Game` 씬 로드 (Build Settings 정리로 canonical 씬이 로드되어야 함) |
+| 5/10프레임 완주 | `[GameOver] 게임 종료!` 로그 + `[HighScore] 기록: ...` 로그 + `[SaveSystem] 저장 완료 — ...` 로그 → Gameover_scene 자동 전환 |
+| Gameover_scene 진입 | `gameover_score` = 최종 점수 / `best_score` = "최고 점수: N" / `new_record` 첫 게임이면 표시 |
+| save.json 확인 | `%USERPROFILE%/AppData/LocalLow/DefaultCompany/bowling demo/save.json` 생성. JSON 에 `modeName`/`frameCount`/`score`/`playedAt` 기록 |
+| 메인메뉴 버튼 | mainmenu 씬 복귀 |
+| Quit 버튼 | Editor 에서는 Play 종료, 빌드에서는 `Application.Quit()` |
+| 재플레이 (낮은 점수) | `new_record` 비활성, `best_score` 직전값 유지 |
+| 재플레이 (높은 점수) | `new_record` 활성, `best_score` 갱신 |
+| 모드 분리 | 쇼트 모드 최고점과 풀 모드 최고점이 서로 영향 없음 |
 
-**증상**: 빌드 / `SceneManager.LoadScene("Game")` 호출 시 실제로 로드되는 씬은 `Assets/Game.unity` (루트) — ResultUI 가 없는 쪽. 본 세션 검증이 통과한 것은 Editor 의 Play 모드가 "현재 열려 있는 씬" 을 직접 재생했기 때문 (Build Settings 무관). mainmenu → Game 흐름에서는 ResultUI 가 보이지 않을 가능성 높음.
+### 2-2. 발견될 가능성 있는 이슈
 
-### 2-2. 복구 절차 (권장 — 옵션 A: canonical 위치 유지)
-
-1. Editor 에서 `Assets/Scenes/Game.unity` 열린 상태 유지
-2. Project 창에서 `Assets/Game.unity` 및 `Assets/Game.unity.meta` 우클릭 → Delete
-3. File > Build Settings 열기 → Scenes In Build 에 `Assets/Scenes/Game.unity` 추가 (drag-drop, index 1 위치)
-4. 기존 `Assets/Game.unity` 항목 (deleted, 빨간 표시) 제거
-5. Build Settings 닫고 `Ctrl+S` 로 씬 저장 + `Assets > Save Project`
-6. `git add EditorBuildSettings.asset Assets/Scenes/Game.unity.meta` + 커밋
-
-### 2-3. 검증
-
-- mainmenu → 쇼트 버튼 → Game 씬 진입 → **`[Result] 초기화 완료` 로그가 떠야 정상** (이전엔 ResultUI 없는 씬이라 로그 없음)
-- 5프레임 완주 → ResultPanel 표시 확인
-
-### 2-4. 대안 (옵션 B — 루트 위치 인정)
-
-`Assets/Game.unity` 가 더 최신이라면 `Assets/Scenes/Game.unity` 를 폐기하고 루트를 표준 위치로 인정. 단 `.meta` GUID 충돌 가능성과 README §14-3 (canonical 경로 명시) 갱신 부담이 있어 비권장.
+- 폰트 `NotoSansKR-Black SDF` 의 `<b>` 무효 이슈 — 신기록 강조에 색 위주 사용 (현재 노란색 텍스트, 폰트 80, 적용됨)
+- `new_record` 안 보이면 `IsNewRecord` 가 false 라는 뜻 — 이전 save.json 에 더 높은 기록 있을 가능성. `%USERPROFILE%/AppData/LocalLow/DefaultCompany/bowling demo/save.json` 삭제 후 재시도
 
 ---
 
-## 3. 우선순위 2 — ResultUI end-to-end 수동 검증
+## 3. 다음 작업 우선순위 2~4 — 후속 후보
 
-### 3-1. 시나리오
-
-mainmenu 에서 시작 → 쇼트 모드 → 5프레임 완주 (스트라이크 1회 + 스페어 1회 포함) → 다음 모두 확인:
-
-| 확인 항목 | 기대 결과 |
-|---|---|
-| 콘솔에 `[Result] 게임 종료 — 패널 표시 (점수 N, 스트라이크 M회, 스페어 K회)` 로그 출력 | ✓ |
-| Canvas 중앙에 검은 반투명 `ResultPanel` 표시 | ✓ |
-| `final_score` 에 정확한 최종 점수 (예: `58`) | ✓ |
-| `strike_count` 에 `"N회"` 형식 (예: `"1회"`) | ✓ |
-| `spare_count` 에 `"M회"` 형식 (0/10 스페어도 카운트됨) | ✓ |
-| `restart_button` 클릭 → 패널 숨김 + 1프레임 재시작 + `[Result] 게임 초기화 — 패널 숨김` 로그 | ✓ |
-| `main_menu_button` 클릭 → mainmenu 씬 로드 + Canvas 자체 사라짐 | ✓ |
-
-### 3-2. 발견될 가능성 높은 이슈 후보
-
-- `strike_count` / `spare_count` 의 텍스트가 `FormatCount` 결과로 덮어쓰여 **"스트라이크" / "스페어" 라벨이 사라짐**. README §14-10-4 참고 — 라벨 영구 표시하려면 `COUNT_FORMAT` 을 `"스트라이크 {0}회"` 로 바꾸거나 별도 라벨 노드 추가
-- ScoreboardUI 의 `gameover_score` 가 ResultPanel 뒤에서 동시 표시될 수 있음 — UX 결정 필요 (배경 불투명화, gameover_score 숨김, 또는 ResultPanel 안으로 통합)
-- 버튼 hover/pressed 상태 시각 피드백이 없음 — Button.colors 기본값만 적용된 상태. 필요 시 Inspector 에서 Highlighted/Pressed 색 조정
+| # | 항목 | 비고 |
+|---|---|---|
+| 2 | 10프레임 동적 점수판 (`README §6/§10`) | 현재 5칸 고정. 풀 모드 시 동적 10칸 확장 필요 |
+| 3 | 튜토리얼 화면 (§14-6 6-e) | 형식 미결정 — 정적 이미지 vs 인터랙티브 |
+| 4 | `FrameManagerTests` 리팩토링 | 예외 기대 케이스 → 새 fail-safe 명세 (`Debug.LogWarning + 무시`) 와 정렬 |
+| 5 | 결과 화면 확장 | "퍼펙트!" 강조, 별/이펙트, 베스트 스코어 비교 표 |
+| 6 | 폴리싱 (Phase 7) | 효과음/BGM/파티클/스킨 |
+| 7 | 접근성 (M4) | TTS, 색각 모드, 자동 보정, 키 리바인딩, 깜빡임 제거 |
 
 ---
 
-## 4. 우선순위 3 — JSON SaveSystem (Phase 8)
+## 4. 다음 세션 재개 절차
 
-### 4-1. 작업 윤곽 (2026-06-05 검토 시 정의됨)
-
-- `SaveSystem` (static): `Save(SaveData)` / `Load() → SaveData` + 파일 I/O + 예외 처리
-- `HighScoreService`: `GameRecord` 생성·정렬·상위 N개 유지·중복 정책
-- `GameManager.OnEnterGameOver` 에서 `HighScoreService.Record(...)` 호출 연동
-- 저장 경로: `Application.persistentDataPath/save.json`
-- 직렬화: JsonUtility (1순위) 또는 Newtonsoft.Json (확장 시 검토)
-
-### 4-2. 사용자 결정 필요한 8개 항목
-
-1. **직렬화 라이브러리** — JsonUtility (기본, 단순) vs Newtonsoft.Json (이미 패키지 설치됨, 유연)
-2. **저장 시점** — `HandleGameOver` 직후 즉시 vs `OnRestartClicked`/`OnMainMenuClicked` 시점에 묶어서
-3. **highScores 상한** — Top 5 / Top 10 / 무제한
-4. **정렬 정책** — 점수 내림차순 (동점 시 날짜 최신순)
-5. **첫 실행 처리** — 파일 없을 때 빈 `SaveData` 반환 vs `null` 후 호출자 책임
-6. **저장 실패 정책** — 로그만 vs 사용자 알림 vs 백업
-7. **백업·복구** — `.json.bak` 회전 vs 단일 파일
-8. **세이브 데이터 버전 관리** — `version: 1` 필드 추가 vs 미정
-
-### 4-3. 영향 받을 기존 파일
-
-- `Assets/Scripts/Persistence/SaveData.cs` (스켈레톤만 존재)
-- `Assets/Scripts/Persistence/GameRecord.cs` (스켈레톤만 존재)
-- 신규: `Assets/Scripts/Persistence/SaveSystem.cs`, `Assets/Scripts/Persistence/HighScoreService.cs`
-- `Assets/Scripts/Core/GameManager.cs` — `OnEnterGameOver` 또는 별도 후크에 `HighScoreService.Record(...)` 추가
-- (선택) `Assets/Scripts/UI/ResultUI.cs` — "베스트 스코어 갱신!" 강조 표시 시 `HighScoreService` 조회 후 비교
-
----
-
-## 5. 우선순위 4 — 후속 후보
-
-| 항목 | 비고 |
-|---|---|
-| 6-b 10프레임 동적 점수판 | README §6/§10 의 "프레임 수에 따라 동적 생성". 풀 모드 시 점수판 5칸 → 10칸 동적 확장 |
-| 6-e 튜토리얼 화면 | 형식 미결정 (정적 이미지 vs 인터랙티브) |
-| `FrameManagerTests` 리팩토링 | 예외 기대 케이스 → 새 fail-safe 명세 (`Debug.LogWarning + 무시`) 와 정렬 |
-| 결과 화면 확장 | "퍼펙트!" 강조, 별/이펙트, 베스트 스코어 비교 (SaveSystem 의존) |
-| 접근성 옵션 (M4, 2026-07-31) | TTS, 색각 모드, 자동 보정, 키 리바인딩, 깜빡임 제거 |
-
----
-
-## 6. 다음 세션 재개 절차
-
-### 6-1. 빠른 재개
+### 4-1. 빠른 재개
 
 ```
-Build Settings 정리부터 진행해줘.
-README §14-10-6 절차 그대로 ✅
+2026-06-19 세션 마무리 됐어. 수동 end-to-end 검증부터 진행할까,
+아니면 다음 우선순위 (10프레임 동적 점수판) 로 갈까?
 ```
 
-### 6-2. 일반 재개
+### 4-2. 일반 재개
 
 사용자가 "다음 작업 재개" 라고만 말하면 클로드가:
-1. `README.md` §14-6 (우선순위 목록) + §14-10-6 (Build Settings 진단) 다시 읽어 컨텍스트 복원
-2. 우선순위 1 (Build Settings) 부터 안내. 사용자 결정 (옵션 A/B) 후 진행
-3. 우선순위 2 (수동 검증) → 3 (JSON SaveSystem) 순차 진행
-
-### 6-3. 진행 방식 변경 시
-
-JSON SaveSystem 을 먼저 하고 싶으면 사용자가 명시. 단 Build Settings 미해결 상태에서 SaveSystem 작업은 의미가 약함 — Game 씬 정상 진입 + GameOver 시점 확정 후 진행하는 것이 자연스러움.
+1. `README.md` §14-6 (우선순위 목록) + §14-13 (SaveSystem 검증 결과) + §14-15 (레인) 다시 읽어 컨텍스트 복원
+2. 우선순위 1 (수동 검증) 안내. 사용자 검증 완료 시 우선순위 2 로 이동
 
 ---
 
-## 7. 절대 잊지 말 것 (재개 시 첫 5분 체크리스트)
+## 5. 절대 잊지 말 것 (재개 시 첫 5분 체크리스트)
 
 - [ ] `AI_PROMPT_REFERENCE.md` §6 (혼동 위험 이름) 재확인 — 특히 `FrameManager` 가 `Bowling.Scoring` 네임스페이스에 있다는 사실
 - [ ] `AI_PROMPT_REFERENCE.md` §7 (절대 건드리지 말 것) 14개 항목 재확인 — 특히 "UI 표시 규칙은 UI 클래스 내부 상수에만 둘 것", "GameManager.Start() ModeSelector 폴백 분기 제거 금지"
-- [ ] Build Settings 가 정리되기 전까지는 **반드시 Editor 에서 `Assets/Scenes/Game.unity` 를 열어둔 상태로 Play** — 아니면 ResultUI 가 안 보임
+- [ ] **Build Settings 는 이제 정리됨** — `Assets/Scenes/Game.unity` 만 사용. 다시 루트에 씬을 저장하지 말 것
 - [ ] `GameManager` GameObject 두 개 중 **ⓑ (FrameManager 보유, instanceID 49714)** 쪽에 `frameManager` 가 와이어링되어 있음 — 옮기지 말 것
-- [ ] 폰트 `NotoSansKR-Black SDF` 의 `<b>` 무효 이슈 — 시각 강조 필요 시 색상/크기 태그 사용
+- [ ] `Mat_Lane` 은 이제 **머티리얼 변형(variant)** — 부모 `Mat_Lane 1` 에서 텍스처/속성을 상속. 색상 외 속성 수정은 부모(`Mat_Lane 1`) 에서
 
 ---
 
-## 8. 본 세션에서 변경된 파일 (commit 후보)
+## 6. 본 세션에서 변경된 파일
 
-- `Assets/Scripts/UI/ResultUI.cs` — 단계 2~4 본문 추가 (구독·헬퍼·핸들러·콜백)
-- `Assets/Scenes/Game.unity` — Canvas 에 ResultUI + ResultPanel 트리 (자식 5개) 추가
-- `Assets/Scenes/Game.unity.meta` — Unity 자동 갱신
-- `README.md` — §14 전반 갱신 (특히 §14-10 신설)
-- `NEXT_SESSION.md` — 본 파일 (2026-06-18 우선순위 재정의)
+**Phase 8 SaveSystem 검증 / Gameover_scene 배선**:
+- `Assets/Scripts/Persistence/SaveSystem.cs` (untracked → tracked, `.meta` 신규)
+- `Assets/Scripts/Persistence/HighScoreService.cs` (untracked → tracked, `.meta` 신규)
+- `Assets/Scenes/Gameover_scene.unity` (best_score / new_record 노드 추가, GameOverUI 와이어링 갱신)
 
-`Assets/Game.unity` (루트, untracked) 와 `EditorBuildSettings.asset` (modified) 는 **본 세션의 변경이 아님** — 이전 세션 잔여물. 우선순위 1 작업 후 함께 정리 권장.
+**Build Settings 정리**:
+- `Assets/Game.unity` **삭제** (+ `.meta` 동반)
+- `ProjectSettings/EditorBuildSettings.asset` (index 1 GUID 교체)
+
+**레인 비주얼 (사용자 작업)**:
+- `Assets/Materials/Mat_Lane.mat` (수정 — 머티리얼 변형으로 전환, 연두색)
+- `Assets/Materials/Mat_Lane 1.mat` (신규, 베이지/카키)
+- `Assets/Materials/Mat_Lane 2.mat` (신규, 살구)
+- `Assets/Materials/Mat_Lane 3.mat` (신규, 황토)
+- `Assets/Scenes/Game.unity` (Lane (1)~(7) 인스턴스 추가, 머티리얼 분배)
+
+**이전 세션(2026-06-19 첫 작업) 산출물 (이미 working tree 에 있던 수정)**:
+- `Assets/Scripts/Persistence/SaveData.cs` (version 필드)
+- `Assets/Scripts/Core/GameResultHolder.cs` (LastBestScore / IsNewRecord)
+- `Assets/Scripts/Core/GameManager.cs` (OnEnterGameOver 후크)
+- `Assets/Scripts/UI/GameOverUI.cs` (bestScoreText/newRecordText)
+
+**문서**:
+- `README.md` §14 갱신 (Phase 8 ✅, Build Settings 정리 기록, 레인 §14-15 신설)
+- `AI_PROMPT_REFERENCE.md` (Persistence / ResultUI 항목 갱신, 푸터 날짜)
+- `NEXT_SESSION.md` (본 파일 — 전면 갱신)
 
 ---
 
-*이 문서는 우선순위 1 (Build Settings 복구) 가 완료되면 갱신되며, 우선순위 3 (JSON SaveSystem) 작업 시점에 다시 재구성된다.*
+*이 문서는 다음 우선순위 작업 진입 시 다시 갱신된다.*
 
-*최종 갱신: 2026-06-18 (ResultUI 단계 2~5 완료 + Build Settings 정리 가이드 + JSON SaveSystem 사전 검토)*
+*최종 갱신: 2026-06-19 (Phase 8 검증 완료 + Build Settings 정리 + 레인 비주얼 작업)*

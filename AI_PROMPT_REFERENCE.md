@@ -44,11 +44,14 @@ Assets/
 │   ├── Scoring/        Frame, FrameType, FrameManager, ScoreCalculator,
 │   │                   ScoringConstants, BowlingRuleConfig
 │   ├── UI/             PowerGaugeUI, ScoreboardUI, MainMenuUI,
-│   │                   ResultUI (※ 골격만, 단계 2~5 미구현)
-│   ├── Persistence/    GameRecord, SaveData            (※ TODO: 직렬화 미구현)
+│   │                   GameOverUI (Gameover_scene 부착),
+│   │                   ResultUI (※ obsolete — Gameover_scene 로 대체, 파일 잔존)
+│   ├── Persistence/    GameRecord, SaveData (version=1),
+│   │                   SaveSystem, HighScoreService   (✅ Phase 8 완료)
+│   ├── Core/           GameResultHolder (DontDestroyOnLoad 싱글톤)
 │   └── Debug/          DebugResetController            (R키 → RestartGame)
 ├── Tests/EditMode/     ScoreCalculatorTests, FrameManagerTests
-├── Scenes/             Game.unity, mainmenu.unity (Build index 0)
+├── Scenes/             mainmenu.unity (idx 0), Game.unity (idx 1), Gameover_scene.unity (idx 2)
 ├── Configs/            ShortModeRule.asset (5프레임), FullModeRule.asset (10프레임)
 └── Settings/           URP 렌더 파이프라인 (건드리지 말 것)
 ```
@@ -252,14 +255,30 @@ static int       CalculateTotalScore(List<Frame> frames);
 - **비정상 호출 정책**: 경고 로그 + 무시(fail-safe). 단 `pinsKnockedDown ∈ [0,10]` 위반만 예외 throw.
 - **⚠ 테스트(`FrameManagerTests`)는 일부 케이스에서 `InvalidOperationException` 을 기대** — 현재 구현과 명세가 어긋남 (테스트 리팩토링 대기 중).
 
-### 3-7. 영속화 (TODO 영역)
+### 3-7. 영속화 (Phase 8 — 코드 작성 완료, 컴파일·검증 대기 / 2026-06-19)
+
+> 네임스페이스 `BowlingGame`, 어셈블리 `Assembly-CSharp` (UnityEngine 의존 OK — `Bowling.Domain` 밖). 직렬화는 `JsonUtility`.
 
 #### `GameRecord` (`[Serializable]`)
-- `string modeName`, `int frameCount`, `int score`, `string playedAt` (ISO 8601)
+- `string modeName`, `int frameCount`, `int score`, `string playedAt` (ISO 8601, `DateTime.UtcNow.ToString("o")`)
 
 #### `SaveData` (`[Serializable]`)
-- `List<GameRecord> highScores`, `string selectedBallSkin`, `string selectedCharacterSkin`
-- 저장 위치(예정): `Application.persistentDataPath/save.json`
+- `int version` (= 1), `List<GameRecord> highScores`, `string selectedBallSkin`, `string selectedCharacterSkin`
+
+#### `SaveSystem` (static)
+- `static string FilePath` — `Application.persistentDataPath/save.json`
+- `static SaveData Load()` — 파일 없음/파싱 실패 시 빈 `SaveData` 반환 (예외 전파 안 함)
+- `static void Save(SaveData)` — `JsonUtility.ToJson(prettyPrint)` → `File.WriteAllText`. 실패 시 `LogWarning` 후 계속
+- **fail-safe 원칙**: 모든 I/O 가 예외를 게임 흐름에 전파하지 않음. 로그 prefix `[SaveSystem]`
+
+#### `HighScoreService` (static)
+- `const int MaxPerMode = 10`
+- `readonly struct RecordResult { bool IsNewRecord; int BestScore; }`
+- `static RecordResult Record(string modeName, int frameCount, int score)` — Load → 직전 최고점 캡처 → 추가 → 모드별 Top N 정렬·trim → Save. `IsNewRecord = score > 직전최고`
+- `static int GetBestScore(string modeName)` — 없으면 0
+- `static List<GameRecord> GetHighScores(string modeName)` — 모드별 정렬된 상위 목록
+- **모드별 분리**: `modeName` 기준 그룹화 (쇼트/풀 만점이 달라 통합 시 풀이 항상 이김). 로그 prefix `[HighScore]`
+- **연동**: `GameManager.OnEnterGameOver` 가 `Record(...)` 호출 후 결과를 `GameResultHolder.SetResult(score, mode, bestScore, isNewRecord)` 로 인계 → `GameOverUI` 가 표시
 
 ---
 
@@ -399,8 +418,8 @@ pinManager.ResetAllPins()
 |---|---|---|
 | `FullModeRule.asset` (10프레임) | ✅ 생성 | `Assets/Configs/FullModeRule.asset`, 퍼펙트 150점 |
 | 메인메뉴 → 게임 씬 전이 + 모드 선택 | ✅ 완료 | `mainmenu.unity` 구성 + `MainMenuUI` + `GameModeSelector` + Build Settings 등록 + 양 모드 Play 검증 |
-| `ResultUI` (결과 화면) | 🟡 골격만 | 단계 1 (using, 직렬화 필드 7개, 메서드 스텁) 완료. 단계 2~5 (구독/헬퍼/핸들러/씬 배선) 미완 — `NEXT_SESSION.md` |
-| `Persistence/` 직렬화 로직 (`SaveSystem`) | ❌ 미구현 | 클래스 정의만 존재. `Application.persistentDataPath/save.json` |
+| `ResultUI` (결과 화면 오버레이) | ⚪ obsolete | Game.unity 오버레이 패널 구조에서 별도 씬(`Gameover_scene` + `GameOverUI`) 로 대체됨 (2026-06-19). 파일 잔존 — Validate 실패로 자동 비활성. 정리 원하면 삭제 가능 |
+| `Persistence/` 직렬화 로직 (`SaveSystem` / `HighScoreService`) | ✅ 완료 (2026-06-19) | 컴파일·Gameover_scene 노드 배선·프로그램 검증 7+3 시나리오 PASS. `GameManager.OnEnterGameOver` 후크 정상 동작. 실제 게임 플레이 end-to-end 수동 검증만 잔여 |
 | 접근성 옵션 (TTS, 색각, 자동 보정, 깜빡임 제거, 키 리바인딩) | ❌ 미구현 | M4 마일스톤 |
 | 거터 처리 (`BowlingBall.IsInGutter`) | 일부 | 판정만 존재, 호출처 없음 |
 | `FrameManagerTests` 의 `InvalidOperationException` 기대 테스트 | ⚠ 명세 불일치 | 실제 구현은 경고+무시. 테스트 리팩토링 필요 |
@@ -537,4 +556,4 @@ Play (mainmenu, build index 0) → 버튼 클릭 시 다음 로그 순서가 보
 
 *이 문서는 코드 변경과 함께 갱신되어야 함. 시그니처·이벤트·필드명이 본 문서와 코드 사이에서 어긋나는 경우, **코드를 기준으로 본 문서를 수정**한다.*
 
-*최종 갱신: 2026-06-07 (mainmenu / GameModeSelector / MainMenuUI / ResultUI 골격 / FullModeRule.asset 추가, 노트북 브랜치 통합, 자동 재시작 코루틴 제거)*
+*최종 갱신: 2026-06-19 (Phase 8 영속화 ✅ 완료 — `SaveSystem`/`HighScoreService` 컴파일·Gameover_scene 배선·프로그램 검증 PASS. Build Settings 정리 — canonical `Assets/Scenes/Game.unity` 만 인덱스 1. 레인 비주얼 — `Mat_Lane` 변형 전환 + Mat_Lane 1/2/3 신규)*

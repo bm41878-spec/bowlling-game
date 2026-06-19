@@ -41,7 +41,22 @@
       "Bash(ls -l /tmp/game.*.unity)",
       "Bash(C:/Program Files/Unity/Hub/Editor/6000.4.7f1/Editor/Data/Tools/UnityYAMLMerge.exe merge *)",
       "Read(//tmp/**)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "PowerShell(gh pr list)",
+      "Bash(ls -la Assets/*.unity)",
+      "Bash(ls -la Assets/Scenes/*.unity)",
+      "Bash(dir *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\bmbm7\\\\bowling demo\\\\bowlling-game\\\\\" -Force | ForEach-Object { \"{0}  [{1}]\" -f $_.Name, $_.Mode })",
+      "PowerShell(Write-Output \"=== Persistence dir ===\"; if \\(Test-Path \"Assets\\\\Scripts\\\\Persistence\"\\) { Get-ChildItem \"Assets\\\\Scripts\\\\Persistence\" -Force | ForEach-Object { \"{0,-40} {1}\" -f $_.Name, $_.Length } } else { \"MISSING\" })",
+      "PowerShell(Write-Output \"=== Persistence dir \\(after refresh\\) ===\"; Get-ChildItem \"Assets\\\\Scripts\\\\Persistence\" -Force | ForEach-Object { \"{0,-40} {1}\" -f $_.Name, $_.Length })",
+      "PowerShell(Test-Path *)",
+      "Bash(powershell -NoProfile -Command 'Get-ChildItem Assets -Recurse -File -Include '\\\\''*.meta'\\\\'' | Select-String -Pattern '\\\\''2f5328dc6abc49841bdd0f003c6e8286'\\\\'' -List | Select-Object -First 3 | ForEach-Object { $_.Path }')",
+      "Bash(grep -E '_BaseColor:|_Color:|_Metallic:|_Smoothness:|_Glossiness:|_BumpScale:|_OcclusionStrength:' Assets/Materials/__TRACKED_VAR__)",
+      "Bash(grep -E \"^\\(@@|[+-].*Lane|[+-].*Mat_Lane|[+-].*m_Name:.*$|[+-].*MeshRenderer\\)\")",
+      "Bash(awk '/^ m_Name: Lane/{name=$2$3} /m_LocalPosition:/{pos=$0; getline; printf \" %s\\\\n pos: %s\\\\n\", name, pos}' Assets/Scenes/Game.unity)",
+      "PowerShell(Write-Output \"=== Assets/Models contents ===\"; Get-ChildItem \"Assets\\\\Models\" -Recurse -File | ForEach-Object { '{0,-50} {1,8} bytes  {2:MM-dd HH:mm}' -f $_.FullName.Replace\\($PWD.Path + '\\\\', ''\\), $_.Length, $_.LastWriteTime })"
     ]
   }
 }
