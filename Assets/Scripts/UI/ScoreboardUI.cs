@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 using TMPro;
 using Bowling.Scoring;
@@ -6,46 +5,39 @@ using Bowling.Scoring;
 namespace BowlingGame
 {
     /// <summary>
-    /// 점수판 UI 갱신 담당. FrameManager 이벤트를 구독하여 TMP_Text 4개를 실시간 갱신.
+    /// 점수판 UI 의 데이터 수집·라우터 — FrameManager 이벤트를 구독하여
+    /// 화면 표시는 <see cref="ScoreboardLayoutRenderer"/> 구현체(현 CardLayoutRenderer)에 위임한다.
     /// </summary>
     /// <remarks>
-    /// 갱신 트리거:
-    ///   OnGameInitialized → 전체 클리어
-    ///   OnFrameStarted    → frame_n 갱신, first/sec 클리어
-    ///   OnThrowRecorded   → frame_N_first 또는 frame_N_sec 갱신
-    ///   OnFrameCompleted  → total_score_n 갱신 (스트라이크 시 sec 도 "-"로 갱신)
-    ///   OnGameOver        → 전체 클리어
-    /// 표시 규칙은 본 클래스에 캡슐화. FrameManager 는 표시 규칙을 모름.
+    /// 책임 분리:
+    /// <list type="bullet">
+    ///   <item>본 클래스 — FrameManager 이벤트 구독, 누적 점수 / 현재 프레임 라벨 / 총점 갱신 호출만</item>
+    ///   <item>레이아웃 — <see cref="ScoreboardLayoutRenderer"/> 구현체가 카드/행/표 표시</item>
+    /// </list>
+    /// 누적 점수는 <see cref="FrameManager.GetTotalScore"/> 사용 — 미완료 프레임은 FrameScore=0 이므로
+    /// OnFrameCompleted 시점의 GetTotalScore() 가 정확히 "그 프레임까지의 누적" 과 일치한다 (독립 프레임 점수 방식의 특성).
+    /// 표시 규칙(X / / / 숫자) 은 <see cref="FrameCardUI"/> 의 상수에 캡슐화 — 본 클래스는 모름.
     /// </remarks>
     public class ScoreboardUI : MonoBehaviour
     {
-        [Header("References")]
-        [SerializeField, Tooltip("GameManager 가 들고 있는 동일 FrameManager 인스턴스를 드래그-드롭. 싱글톤 우회 — 명시적 의존성 가시화.")]
+        private const string LogPrefix = "[Scoreboard]";
+
+        [Header("Domain")]
+        [SerializeField, Tooltip("Game.unity 의 GameManager(ⓑ) 에 부착된 FrameManager 인스턴스를 드래그-드롭.")]
         private FrameManager frameManager;
 
-        [Header("TMP Targets (Canvas 하위)")]
-        [SerializeField, Tooltip("Canvas > total_score > total_score_n")]
+        [Header("Layout Renderer")]
+        [SerializeField, Tooltip("CardLayoutRenderer (옵션 B) 또는 추후 TableLayoutRenderer (옵션 C). 인스펙터에서 교체 가능.")]
+        private ScoreboardLayoutRenderer layout;
+
+        [Header("Side Labels (optional)")]
+        [SerializeField, Tooltip("우측 큰 총점 표시 (선택 — 미할당 시 무시)")]
         private TMP_Text totalScoreText;
 
-        [SerializeField, Tooltip("Canvas > current_frame > frame_n")]
-        private TMP_Text currentFrameText;
+        [SerializeField, Tooltip("현재 진행 상태 표시 (예: '프레임 3 / 1구'). 선택")]
+        private TMP_Text currentFrameLabel;
 
-        [SerializeField, Tooltip("Canvas > frame_N_first")]
-        private TMP_Text frameFirstText;
-
-        [SerializeField, Tooltip("Canvas > frame_N_sec")]
-        private TMP_Text frameSecText;
-
-        [SerializeField, Tooltip("Canvas > gameover_score — 게임 종료 시 최종 점수 표시")]
-        private TMP_Text gameOverScoreText;
-
-        // 표시 규칙 단일 출처(single source of truth)
-        private const string STRIKE_FIRST_DISPLAY = "<b>X</b>";    // 스트라이크 1구
-        private const string STRIKE_SEC_DISPLAY   = "-";           // 스트라이크 2구 (굴리지 않음)
-        private const string SPARE_SEC_DISPLAY    = "<b>/</b>";    // 스페어 2구
-        private const string EMPTY_DISPLAY        = "";            // 클리어 시
-
-        private void Start()
+        void Start()
         {
             if (!Validate())
             {
@@ -59,138 +51,77 @@ namespace BowlingGame
             frameManager.OnFrameCompleted  += HandleFrameCompleted;
             frameManager.OnGameOver        += HandleGameOver;
 
-            Debug.Log("[Scoreboard] 초기화 완료 — FrameManager 이벤트 구독 시작");
+            Debug.Log($"{LogPrefix} 초기화 완료 — FrameManager 이벤트 구독 시작");
         }
 
-        private void OnDestroy()
+        void OnDestroy()
         {
-            if (frameManager != null)
-            {
-                frameManager.OnGameInitialized -= HandleGameInitialized;
-                frameManager.OnFrameStarted    -= HandleFrameStarted;
-                frameManager.OnThrowRecorded   -= HandleThrowRecorded;
-                frameManager.OnFrameCompleted  -= HandleFrameCompleted;
-                frameManager.OnGameOver        -= HandleGameOver;
-            }
+            if (frameManager == null) return;
+            frameManager.OnGameInitialized -= HandleGameInitialized;
+            frameManager.OnFrameStarted    -= HandleFrameStarted;
+            frameManager.OnThrowRecorded   -= HandleThrowRecorded;
+            frameManager.OnFrameCompleted  -= HandleFrameCompleted;
+            frameManager.OnGameOver        -= HandleGameOver;
         }
 
         private bool Validate()
         {
-            if (frameManager == null)
-            { Debug.LogError("[Scoreboard] frameManager 참조 누락"); return false; }
-            if (totalScoreText == null)
-            { Debug.LogError("[Scoreboard] totalScoreText 참조 누락"); return false; }
-            if (currentFrameText == null)
-            { Debug.LogError("[Scoreboard] currentFrameText 참조 누락"); return false; }
-            if (frameFirstText == null)
-            { Debug.LogError("[Scoreboard] frameFirstText 참조 누락"); return false; }
-            if (frameSecText == null)
-            { Debug.LogError("[Scoreboard] frameSecText 참조 누락"); return false; }
-            if (gameOverScoreText == null)
-            { Debug.LogError("[Scoreboard] gameOverScoreText 참조 누락"); return false; }
+            if (frameManager == null) { Debug.LogError($"{LogPrefix} frameManager 미할당"); return false; }
+            if (layout == null)       { Debug.LogError($"{LogPrefix} layout 미할당");       return false; }
             return true;
         }
 
-        /// <summary>frame_N_first 표시 문자열 생성</summary>
-        private string FormatFirstThrow(Frame frame)
-        {
-            if (frame.IsStrike())
-                return STRIKE_FIRST_DISPLAY;
-            return frame.Ball1.ToString();
-        }
-
-        /// <summary>frame_N_sec 표시 문자열 생성</summary>
-        /// <remarks>
-        /// 우선순위: Strike("-") > Spare("/") > 일반(Ball2 숫자)
-        /// </remarks>
-        private string FormatSecondThrow(Frame frame)
-        {
-            if (frame.IsStrike())
-                return STRIKE_SEC_DISPLAY;
-            if (frame.IsSpare())
-                return SPARE_SEC_DISPLAY;
-            return frame.Ball2.ToString();
-        }
-
-        /// <summary>frame_n 표시 (0-base → 1-base 변환)</summary>
-        /// <remarks>AI_PROMPT_REFERENCE §6: 페이로드는 0-base, UI/로그는 1-base</remarks>
-        private string FormatFrameNumber(int frameIndex)
-        {
-            return (frameIndex + 1).ToString();
-        }
-
-        /// <summary>total_score_n 표시</summary>
-        private string FormatTotalScore(int score)
-        {
-            return score.ToString();
-        }
-
-        /// <summary>모든 UI 텍스트를 빈 문자열로 초기화</summary>
-        private void ClearAllText()
-        {
-            totalScoreText.text   = EMPTY_DISPLAY;
-            currentFrameText.text = EMPTY_DISPLAY;
-            frameFirstText.text   = EMPTY_DISPLAY;
-            frameSecText.text     = EMPTY_DISPLAY;
-        }
+        // ---------- 이벤트 핸들러 ----------
 
         private void HandleGameInitialized()
         {
-            ClearAllText();
-            gameOverScoreText.text = EMPTY_DISPLAY;
-            Debug.Log("[Scoreboard] 게임 초기화 — UI 클리어 (gameover_score 포함)");
+            int frameCount = frameManager.GetFrameCount();
+            layout.Initialize(frameCount);
+            if (totalScoreText != null)    totalScoreText.text = "0";
+            if (currentFrameLabel != null) currentFrameLabel.text = "";
+            Debug.Log($"{LogPrefix} 게임 초기화 — {frameCount}프레임 레이아웃 생성");
         }
 
         private void HandleFrameStarted(int frameIndex)
         {
-            currentFrameText.text = FormatFrameNumber(frameIndex);
-            frameFirstText.text   = EMPTY_DISPLAY;
-            frameSecText.text     = EMPTY_DISPLAY;
-            Debug.Log($"[Scoreboard] 프레임 {frameIndex + 1} 시작 — first/sec 클리어");
+            layout.SetActiveFrame(frameIndex);
+            UpdateCurrentFrameLabel(frameIndex, 1);
         }
 
         private void HandleThrowRecorded(int frameIndex, int throwNumber, Frame frame)
         {
-            if (throwNumber == 1)
-            {
-                frameFirstText.text = FormatFirstThrow(frame);
-            }
-            else if (throwNumber == 2)
-            {
-                frameSecText.text = FormatSecondThrow(frame);
-            }
-            else
-            {
-                Debug.LogWarning($"[Scoreboard] 알 수 없는 throwNumber: {throwNumber}");
-                return;
-            }
-            Debug.Log($"[Scoreboard] 프레임 {frameIndex + 1} / {throwNumber}구 표시 갱신");
+            layout.UpdateThrow(frameIndex, throwNumber, frame);
+
+            // 1구 후 스트라이크 아니면 → 2구 대기 라벨로 전환
+            if (throwNumber == 1 && !frame.IsStrike())
+                UpdateCurrentFrameLabel(frameIndex, 2);
+            // 스트라이크 1구 / 일반 2구 직후 → 곧 OnFrameCompleted → OnFrameStarted 가 다음 라벨 결정
         }
 
         private void HandleFrameCompleted(int frameIndex, Frame frame)
         {
-            // 스트라이크 케이스: sec 에 "-" 명시
-            // (HandleThrowRecorded 는 throwNumber 별로만 처리되므로 sec 가 빈 상태로 남음)
-            if (frame.IsStrike())
-            {
-                frameSecText.text = STRIKE_SEC_DISPLAY;
-            }
-
-            // 총점 갱신 (프레임 완료 시점에만)
-            int total = frameManager.GetTotalScore();
-            totalScoreText.text = FormatTotalScore(total);
-
-            Debug.Log($"[Scoreboard] 프레임 {frameIndex + 1} 완료 — 누적 총점 {total}");
+            // OnFrameCompleted 시점의 GetTotalScore() == frames[0..frameIndex] 의 합 (미완료는 0)
+            int cumulative = frameManager.GetTotalScore();
+            layout.UpdateFrameComplete(frameIndex, frame, cumulative);
+            if (totalScoreText != null) totalScoreText.text = cumulative.ToString();
+            Debug.Log($"{LogPrefix} 프레임 {frameIndex + 1} 완료 — 누적 {cumulative}");
         }
 
         private void HandleGameOver()
         {
-            int finalScore = frameManager.GetTotalScore();
+            int final = frameManager.GetTotalScore();
+            layout.SetGameOver(final);
+            if (totalScoreText != null)    totalScoreText.text = final.ToString();
+            if (currentFrameLabel != null) currentFrameLabel.text = "게임 종료";
+            Debug.Log($"{LogPrefix} 게임 종료 — 최종 점수 {final}");
+        }
 
-            ClearAllText();
-            gameOverScoreText.text = FormatTotalScore(finalScore);
+        // ---------- 라벨 헬퍼 ----------
 
-            Debug.Log($"[Scoreboard] 게임 종료 — 점수판 클리어, gameover_score 에 최종 점수 {finalScore} 표시");
+        private void UpdateCurrentFrameLabel(int frameIndex, int throwNumber)
+        {
+            if (currentFrameLabel == null) return;
+            currentFrameLabel.text = $"프레임 {frameIndex + 1} / {throwNumber}구";
         }
     }
 }
