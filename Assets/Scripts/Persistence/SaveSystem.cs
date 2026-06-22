@@ -47,6 +47,10 @@ namespace BowlingGame
 
                 // JsonUtility 는 누락 필드를 기본값으로 두므로 highScores null 가드.
                 if (data.highScores == null) data.highScores = new System.Collections.Generic.List<GameRecord>();
+
+                // 음량 필드 마이그레이션 — 구 save.json (필드 없음) 에서는 0f 로 로드되므로 기본값으로 보정.
+                NormalizeVolumes(data);
+
                 Debug.Log($"{LogPrefix} 로드 완료 — 기록 {data.highScores.Count}건 (version {data.version})");
                 return data;
             }
@@ -81,5 +85,17 @@ namespace BowlingGame
         }
 
         private static SaveData NewEmpty() => new SaveData();
+
+        // 구 save.json 호환 — 음량 필드가 직렬화 데이터에 없으면 JsonUtility 가 0f 로 두므로
+        // 정확히 0f 인 경우(미마이그레이션) 새 SaveData 의 기본값으로 교체한다.
+        // 사용자가 의도적으로 0(완전 음소거) 으로 설정한 경우와 구분 불가하다는 한계가 있으나,
+        // 음소거 UI 가 별도로 mute 플래그를 둘 예정이므로 (M4 접근성) 트레이드오프 허용.
+        private static void NormalizeVolumes(SaveData data)
+        {
+            var defaults = new SaveData();
+            if (data.masterVolume == 0f) data.masterVolume = defaults.masterVolume;
+            if (data.sfxVolume    == 0f) data.sfxVolume    = defaults.sfxVolume;
+            if (data.bgmVolume    == 0f) data.bgmVolume    = defaults.bgmVolume;
+        }
     }
 }

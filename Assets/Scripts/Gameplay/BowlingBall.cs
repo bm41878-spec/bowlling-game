@@ -1,9 +1,22 @@
+using System;
 using UnityEngine;
 
 namespace BowlingGame
 {
     public class BowlingBall : MonoBehaviour
     {
+        /// <summary>
+        /// 현재 투구에서 공이 처음 핀(Pin 컴포넌트 보유)에 닿는 순간 1회 발화.
+        /// 다음 투구에서 다시 발화하려면 ResetBall() 경유로 플래그가 리셋되어야 한다.
+        /// 사운드/이펙트/카메라쉐이크 등 외부 모듈이 구독한다.
+        /// </summary>
+        public event Action OnFirstPinContact;
+
+        /// <summary>
+        /// 현재 투구에서 공이 처음 거터 영역(|x| &gt; 0.533)에 진입하는 순간 1회 발화.
+        /// Rolling 상태에서만 폴링하며, ResetBall() 에서 플래그가 리셋된다.
+        /// </summary>
+        public event Action OnEnteredGutter;
         [SerializeField] float minForce = 8f;
         [SerializeField] float maxForce = 18f;
 
@@ -25,6 +38,10 @@ namespace BowlingGame
         private bool hasLaunched = false;
         /// <summary>최종 폴백(코루틴) 진행 중 여부. 중복 실행 방지.</summary>
         private bool isForceResetting = false;
+        /// <summary>이번 투구에서 OnFirstPinContact 가 이미 발화되었는지. ResetBall() 에서 리셋.</summary>
+        private bool hasPlayedPinHitThisThrow = false;
+        /// <summary>이번 투구에서 OnEnteredGutter 가 이미 발화되었는지. ResetBall() 에서 리셋.</summary>
+        private bool hasEnteredGutterThisThrow = false;
 
         void Awake()
         {
@@ -106,6 +123,10 @@ namespace BowlingGame
             // 6) 동적 복귀 — 깨끗한 상태로 시뮬레이션 재개.
             rb.isKinematic = false;
             hasLaunched = false;
+
+            // 사운드/이펙트 1회 발화 플래그 리셋 — 다음 투구에서 재발화 가능 (조건 3: 리스폰 시 재생 가능).
+            hasPlayedPinHitThisThrow = false;
+            hasEnteredGutterThisThrow = false;
         }
 
         /// <summary>
@@ -200,10 +221,33 @@ namespace BowlingGame
             StartCoroutine(ForceResetCoroutine(resetPos));
         }
 
-        // TODO: 거터 진입 시 점수 시스템 연계 예정 (Phase 미정).
-        //   - 활용 후보: 거터 강제 0점 처리 / 거터 진입 효과음 / UI 안내.
-        //   - 현재는 판정만 노출하고 호출처 없음.
+        // 거터 진입 판정 — |x| > 0.533 (레인 절반 폭 + 약간의 여유).
+        // 효과음 후크는 OnEnteredGutter 이벤트(아래 Update 폴링) 로 노출되며, 점수 시스템 연계는 추후 Phase.
         public bool IsInGutter => Mathf.Abs(transform.position.x) > 0.533f;
+
+        void Update()
+        {
+            // Rolling 상태에서만 거터 진입 폴링. Aiming/Scoring/Ready 등은 무시.
+            // 폴링 비용은 transform.position.x 한 번 + 분기 — 매 프레임 부담 없음.
+            if (hasEnteredGutterThisThrow) return;
+            if (stateManager == null || stateManager.CurrentState != GameState.Rolling) return;
+            if (!IsInGutter) return;
+
+            hasEnteredGutterThisThrow = true;
+            Debug.Log($"[Ball] 거터 진입 감지 (x={transform.position.x:F2})");
+            OnEnteredGutter?.Invoke();
+        }
+
+        void OnCollisionEnter(Collision collision)
+        {
+            // 핀 충돌음 1회 발화 게이트 (조건 1·2).
+            if (hasPlayedPinHitThisThrow) return;
+            if (collision.collider.GetComponent<Pin>() == null) return;
+
+            hasPlayedPinHitThisThrow = true;
+            Debug.Log($"[Ball] 첫 핀 접촉 (대상: {collision.collider.name})");
+            OnFirstPinContact?.Invoke();
+        }
 
         void OnDestroy()
         {
