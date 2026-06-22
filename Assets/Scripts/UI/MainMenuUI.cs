@@ -31,9 +31,15 @@ namespace BowlingGame
         [SerializeField, Tooltip("풀 모드 시작 버튼")]
         private Button fullButton;
 
+        [SerializeField, Tooltip("설정 화면 진입 버튼 (옵셔널 — 미할당 시 기능 비활성)")]
+        private Button settingsButton;
+
         [Header("Scene")]
         [SerializeField, Tooltip("게임 씬 이름. Build Settings 에 등록되어 있어야 함.")]
         private string gameSceneName = "Game";
+
+        [SerializeField, Tooltip("설정 씬 이름. Build Settings 에 등록되어 있어야 함.")]
+        private string settingsSceneName = "settings";
 
         private void Start()
         {
@@ -45,14 +51,17 @@ namespace BowlingGame
 
             shortButton.onClick.AddListener(OnShortClicked);
             fullButton.onClick.AddListener(OnFullClicked);
+            if (settingsButton != null)
+                settingsButton.onClick.AddListener(OnSettingsClicked);
 
             Debug.Log("[MainMenu] 초기화 완료 — 버튼 콜백 등록");
         }
 
         private void OnDestroy()
         {
-            if (shortButton != null) shortButton.onClick.RemoveListener(OnShortClicked);
-            if (fullButton  != null) fullButton.onClick.RemoveListener(OnFullClicked);
+            if (shortButton != null)    shortButton.onClick.RemoveListener(OnShortClicked);
+            if (fullButton  != null)    fullButton.onClick.RemoveListener(OnFullClicked);
+            if (settingsButton != null) settingsButton.onClick.RemoveListener(OnSettingsClicked);
         }
 
         private bool Validate()
@@ -68,6 +77,17 @@ namespace BowlingGame
 
         private void OnShortClicked() => StartGameWith(shortModeRule);
         private void OnFullClicked()  => StartGameWith(fullModeRule);
+
+        private void OnSettingsClicked()
+        {
+            if (string.IsNullOrEmpty(settingsSceneName))
+            {
+                Debug.LogError("[MainMenu] settingsSceneName 비어있음 — 설정 씬 진입 무시");
+                return;
+            }
+            Debug.Log($"[MainMenu] 설정 씬 진입 → {settingsSceneName}");
+            SceneManager.LoadScene(settingsSceneName);
+        }
 
         private void StartGameWith(BowlingRuleConfig rule)
         {
