@@ -1,8 +1,142 @@
 # 다음 세션 재개 가이드
 
-> **작성일**: 2026-06-19 (Phase 8 JSON SaveSystem 검증 완료 + Build Settings 정리 + 레인 비주얼 작업)
+> **작성일**: 2026-06-23 (점수판 UI 재제작 + 타이틀/대기 화면 신설)
+
+---
+
+## 00. 2026-06-23 세션 산출물 (타이틀 화면)
+
+| 항목 | 변경 |
+|---|---|
+| `title.unity` 신규 | Game.unity 복제 후 게임 로직 (GameManager ⓐ/ⓑ, Canvas 점수판, HUD_Canvas) 제거. BowlingBall / Pin 들 Rigidbody.isKinematic. Build Settings idx 0 으로 등록 |
+| `TitleScreenController.cs` | 시네마틱 카메라 (CinematicShot[] 인스펙터 조정 가능, 기본 3샷 Pin/Ball/Lane Overview), 페이드 인/아웃, "아무 키나 누르세요" 깜빡임, 버전 라벨, 입력 시 mainmenu 전환 |
+| `title.unity` Canvas | TitleCanvas: AnyKeyHint / VersionLabel ("v" + Application.version) / FadePanel (검은 alpha=1 시작, 가장 위 자식) |
+| Build Settings | 재배열: 0=title, 1=mainmenu, 2=Game, 3=Gameover_scene, 4=settings (이름 기반 LoadScene 호출은 영향 없음) |
+| 입력 감지 | Update 폴링 — Keyboard.anyKey + Mouse 3버튼 + Gamepad 8버튼 |
+| 문서 | `AI_PROMPT_REFERENCE.md` §3-10 신설 + 푸터 갱신, 본 파일 갱신 |
+
+**검증 안내** — Play 모드 (idx 0 = title 자동 진입):
+1. 검은 화면 → 페이드 인 → 핀 클로즈업 (Cinemachine PinVCam → PinTarget 응시, SmoothStep ease 보간) → 페이드 아웃 → 검은 hold → 페이드 인 → 볼 클로즈업 → ... → Lane Overview → 다시 반복
+2. **"Bowling Champion"** 제목 화면 상단 가운데 항상 표시 (페이드와 무관, FadePanel 위)
+3. "아무 키나 누르세요" 텍스트 화면 가운데 하단 깜빡임
+4. 우측 하단 "v0.1.0" (Application.version 표시)
+5. 키보드/마우스/게임패드 어느 버튼이든 누르면 짧은 페이드아웃 후 mainmenu 전환
+6. 카메라 좌표/회전이 어색하면: vcam GameObject (PinVCam / BallVCam / LaneVCam) 의 Transform 을 직접 조정하거나, LookAt 더미 (CinematicTargets/PinTarget 등) 위치 조정. endPosition 은 TitleScreenController.Shots 배열에서 조정
+7. Scene View 에 각 vcam 의 Gizmo + frustum 시각화됨 — 조정에 활용
+
+---
+
+## 0. 2026-06-23 세션 산출물 (점수판 재제작, 본 세션 1차)
+
+---
+
+## 0. 2026-06-23 세션 산출물 (점수판 재제작)
+
+| 항목 | 변경 |
+|---|---|
+| `ScoreboardUI` | 이름 유지, 내부 완전 교체. FrameManager 이벤트 수집 + `layout` 추상에 위임만 담당. SerializeField: `frameManager` / `layout` / `totalScoreText` / `currentFrameLabel` |
+| `ScoreboardLayoutRenderer` (신규) | 추상 베이스. 6개 추상 메서드 (`Initialize`/`UpdateThrow`/`UpdateFrameComplete`/`SetActiveFrame`/`SetGameOver`/`ClearAll`) |
+| `CardLayoutRenderer` (신규) | 옵션 B 구현. cardPrefab Instantiate 로 동적 카드 생성 |
+| `FrameCardUI` (신규, prefab) | 한 카드 컴포넌트. `Assets/Prefabs/FrameCard.prefab` |
+| `Game.unity` Canvas | 기존 `total_score/current_frame/frame_*` 제거 → `ScoreboardTop`(CardContainer+TotalScorePanel) + `CurrentFrameLabel` |
+| 문서 | `AI_PROMPT_REFERENCE.md` §3-5 (ScoreboardUI / LayoutRenderer / FrameCardUI) + §6 / §7 (23·24) + §11-2 + 푸터 갱신 |
+
+**검증 대기**: Play 모드에서 쇼트/풀 양 모드 진입 → 매 투구 카드 갱신 / 프레임 완료 시 누적 점수 / 총점 / 현재 프레임 라벨 정상 표시 확인. 기존 사용자 보고 "점수 계산 정상 안 됨" 의 원인이 UI 였는지 도메인이었는지 이 검증으로 분리 진단됨.
+
+---
+
+## 0-1. 2026-06-22 세션 산출물 (이전, 보관용 요약)
 > **목적**: 세션 간 컨텍스트 손실 없이 다음 우선순위를 이어가기 위한 단일 출처.
-> **선행 문서**: `README.md` §14 (특히 §14-13 SaveSystem, §14-15 레인), `AI_PROMPT_REFERENCE.md` (컨벤션·구조)
+> **선행 문서**: `AI_PROMPT_REFERENCE.md` §3-5 (입력) / §3-8 (오디오) / §3-9 (설정), `SETTINGS_ROADMAP.md` §10·§11 (진행 기록)
+
+---
+
+## 0. 2026-06-22 세션 산출물 (요약)
+
+| 카테고리 | 산출물 |
+|---|---|
+| 오디오 시스템 | `AudioManager` 싱글톤 (DontDestroyOnLoad), `MainMixer.mixer` (Master/SFX/BGM Exposed Parameters 3종), `ONHIT.wav` (핀충돌) / `BALL_LAINROLL.wav` (굴림) 배선. `BowlingBall.OnFirstPinContact` / `OnEnteredGutter` 이벤트 + 1회 게이트 |
+| 설정 시스템 (1·2차) | `SettingsApplier` 싱글톤 라우터 (DontDestroyOnLoad), `SettingsUI` (탭 5개), **Audio 탭** (Master/SFX/BGM + Mute) + **Controls 탭** (키보드/게임패드 리바인딩 + 기본값 복원). `settings.unity` 신규 (Build Settings idx 3). `SaveData.isMuted` / `inputOverridesJson` 추가 |
+| 입력 시스템 | `InputController` 진입점을 mainmenu DontDestroyOnLoad 로 이전 (Awake self-destroy 를 컴포넌트 단위로 변경). binding 2개 추가 (Keyboard/space + Gamepad/buttonSouth — Xbox A / PS Cross / DualSense Cross 자동 지원). 리바인딩 API 공개 |
+| 진입 흐름 | mainmenu → "설정" 버튼 → settings 씬 → 메인메뉴 버튼 → mainmenu 복귀 |
+| 문서 | `AI_PROMPT_REFERENCE.md` §3-5 / §3-8 / §3-9 신설, `SETTINGS_ROADMAP.md` §10·§11, 본 파일 전면 갱신 |
+
+---
+
+## 1. 다음 작업 우선순위
+
+| # | 항목 | 비고 |
+|---|---|---|
+| **1** | 🎯 **Play 모드 검증 + 점수 도메인 디버깅** | 새 점수판 UI 가 정상 동작하는지 쇼트/풀 양 모드로 확인. 같은 증상 (점수 계산 이상) 이 남아 있으면 `FrameManager` / `ScoreCalculator` 디버깅 |
+| 2 | **`TableLayoutRenderer` (옵션 C)** | 3행 테이블 (Frame / Throws / Score) 레이아웃. 이번 세션 추상 베이스 답습 — 새 컴포넌트 1개 추가 + 인스펙터에서 layout 교체 |
+| 3 | **Display 탭** | `SaveData` 에 screenWidth/Height, fullScreenMode, vSyncCount, targetFrameRate, uiScale 추가 + `SettingsApplier.ApplyDisplay` |
+| 4 | **Accessibility 탭** | Bumper 모드 + 자동 조준 보조. 볼링 차별 항목 |
+| 5 | **UX 탭** | 카메라 거리 / 기록 초기화 (모달) / 세이브 폴더 열기 |
+| 6 | **튜토리얼 화면** | 형식 미결정 |
+| 7 | **FrameManagerTests 리팩토링** | 예외 기대 케이스 → fail-safe 명세 정렬 |
+| 8 | **UI 폴리싱** | 슬라이더 핸들 / 버튼 / RebindOverlay / FrameCard 디자인 통일 |
+
+---
+
+## 2. 재개 절차
+
+### 2-1. 빠른 재개
+
+```
+2026-06-22 세션 마무리 됐어. 설정 시스템 다음 탭 채우기로 가자 — Display / Accessibility / Controls / UX 중 어느 것부터?
+```
+
+### 2-2. 일반 재개
+
+사용자가 "다음 작업 재개" 라고만 말하면 클로드가:
+1. `AI_PROMPT_REFERENCE.md` §3-9 (설정 시스템) + `SETTINGS_ROADMAP.md` §10 (진행 기록 / 다음 우선순위) 다시 읽어 컨텍스트 복원
+2. 우선순위 1 (Display 탭) 부터 안내. 사용자가 다른 탭 우선 원하면 그 쪽으로
+
+---
+
+## 3. 절대 잊지 말 것 (재개 시 첫 5분 체크리스트)
+
+- [ ] `AI_PROMPT_REFERENCE.md` §7 (절대 건드리지 말 것) — 특히 20·21번 (`SettingsUI` SerializeField / `SaveData.isMuted` 의미)
+- [ ] `AI_PROMPT_REFERENCE.md` §3-8 의 AudioMixer Exposed Parameter 이름 (`MasterVolume`/`SFXVolume`/`BGMVolume`) — 한쪽만 변경 시 SetFloat 가 조용히 실패
+- [ ] 새 SaveData 필드 추가 시: JsonUtility 가 누락 필드를 default(T) 로 두므로, `SaveSystem.Load()` 의 `NormalizeVolumes` 옆에 마이그레이션 보정 추가 (필드 기본값이 의미를 갖는 경우만 — bool 은 false 가 자연스러우므로 보정 불필요)
+- [ ] 새 카테고리 추가 시: `SettingsApplier.RefreshFromSave` 에 `ApplyXxx(save)` 줄 한 줄 추가 + 해당 메서드 구현
+- [ ] 설정 UI 의 새 탭 추가 시: `SettingsUI` 의 Audio 탭 패턴 답습 — SerializeField → BindXxxTab → OnXxxChanged → SaveSystem.Save
+
+---
+
+## 4. 본 세션에서 변경된 파일
+
+**스크립트 (신규/수정)**:
+- `Assets/Scripts/Persistence/SaveData.cs` — `isMuted` 추가
+- `Assets/Scripts/Audio/AudioManager.cs` — `SetMuted` / `IsMuted` / `last*` 캐싱 + `ApplyEffectiveMixer` / Start 에서 isMuted 적용
+- `Assets/Scripts/Settings/SettingsApplier.cs` (신규)
+- `Assets/Scripts/UI/SettingsUI.cs` (신규)
+- `Assets/Scripts/UI/MainMenuUI.cs` — `settingsButton` / `settingsSceneName` 추가 + 핸들러
+
+**자산**:
+- `Assets/Audio/MainMixer.mixer` (이전 세션 작업, 그대로 사용)
+- `Assets/Scenes/settings.unity` (신규)
+
+**씬 (수정)**:
+- `mainmenu.unity` — `SettingsApplier` GameObject + Canvas 의 `SettingsButton` (ShortButton 복제, y=-300)
+- `settings.unity` — 전체 UI 구조
+
+**문서**:
+- `AI_PROMPT_REFERENCE.md` — §3-9 신설 + §6 / §7 / §11-3 / 푸터 갱신
+- `SETTINGS_ROADMAP.md` — §9 결정 사항 체크 + §10 진행 기록 신설
+- 본 파일 — 전면 갱신
+
+---
+
+*이 문서는 다음 우선순위 작업 진입 시 다시 갱신된다.*
+
+*최종 갱신: 2026-06-22 (오디오 + 설정 시스템 1차 — Audio 탭 완성)*
+
+---
+
+# 이전 세션 (2026-06-19) 기록 (보관)
+
+> 아래는 직전 세션의 NEXT_SESSION 본문 — 참고용 보관. M2 마일스톤 critical path 는 모두 해소되었음.
 
 ---
 

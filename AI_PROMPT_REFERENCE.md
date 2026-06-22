@@ -195,32 +195,58 @@ static int       CalculateTotalScore(List<Frame> frames);
 
 ### 3-5. 입력 / UI
 
-#### `InputController` (MonoBehaviour, **싱글톤**)
-- `static Instance`
-- 이벤트: `event Action OnConfirmPressed` — 키 바인딩 **`<Keyboard>/space`**
-- **현재 매핑이 스페이스바로 하드코딩** — 키 리바인딩은 미구현(TODO).
+#### `InputController` (MonoBehaviour, **싱글톤**, **DontDestroyOnLoad**)
+- `static Instance` — mainmenu.unity 의 단독 GameObject `InputController` 가 진입점 (2026-06-22 변경). settings / Game 으로 살아서 넘어감
+- **Awake 의 중복 처리**: `Destroy(this)` (컴포넌트만 파괴) — Game.unity 의 GameManager(ⓐ) 에 부착된 기존 InputController 컴포넌트가 같이 사라지는 것이 아니라 자기 자신만 사라져 GameStateManager / DebugResetController 보호. mainmenu 경유 진입 시 Game 의 InputController 컴포넌트는 self-destroy 되고 mainmenu 의 것이 유지된다
+- **Game.unity 단독 Play 호환**: GameManager(ⓐ) 의 InputController 가 첫 인스턴스로 등록 + DontDestroyOnLoad(gameObject) — 디버깅 경로. mainmenu 경유가 정상 흐름
+- 이벤트: `event Action OnConfirmPressed` — 키보드/게임패드 어느 쪽이 눌려도 1회 발화
+- **InputAction `confirmAction`** — 항상 활성, binding 2개 (인덱스 고정):
+  - `[0]` = `<Keyboard>/space` — `KeyboardBindingIndex` 상수
+  - `[1]` = `<Gamepad>/buttonSouth` — `GamepadBindingIndex` 상수 (Xbox A / PS Cross / DualSense Cross)
+- 공개 API (리바인딩 / 직렬화 — SettingsUI 가 사용):
+  - `InputAction ConfirmAction { get; }` — `PerformInteractiveRebinding` 호출 위해 외부에서 참조
+  - `string SaveBindingOverridesJson()` — 현재 override 상태를 JSON 으로
+  - `void LoadBindingOverridesJson(string)` — null/empty 가드 (구 SaveData 호환)
+  - `void ResetAllBindingsToDefault()` / `void ResetBindingToDefault(int)` — RemoveBindingOverride 래핑
+  - `string GetBindingDisplayString(int)` — 사람 읽기용 ("Space", "A")
+- **Start** 에서 `SaveSystem.Load().inputOverridesJson` 자동 적용 — AudioManager 의 음량 복원과 동일 패턴
+- 게임패드 자동 인식: Unity Input System 의 `Gamepad` 표준 추상화 — DualSense/DualShock/Xbox 모두 동일 binding 으로 동작. 별도 활성 토글 불필요.
 
 #### `PowerGaugeUI` (MonoBehaviour)
 - 직렬화 필드: `arrowShaft` (RectTransform), `powerValueText` (TMP_Text), `minHeight = 20f`, `maxHeight = 160f`, `gaugeSpeed = 1.5f`
 - 공개 프로퍼티: `float ConfirmedNormalized` (0~1)
 - 색상 상수 내장: 0~40% `#00C853`, ~70% `#FFD700`, 이상 `#FF1744`
 
-#### `ScoreboardUI` (MonoBehaviour)
-- 직렬화 필드 (씬 인스펙터에서 직접 주입 — 싱글톤 우회):
-  - `frameManager` (FrameManager) — `Bowling.Scoring` 어셈블리. `using Bowling.Scoring;` 필요
-  - `totalScoreText`, `currentFrameText`, `frameFirstText`, `frameSecText` (TMP_Text)
-- 표시 규칙 상수 (단일 출처):
-  - `STRIKE_FIRST_DISPLAY = "<b>X</b>"`, `STRIKE_SEC_DISPLAY = "-"`, `SPARE_SEC_DISPLAY = "<b>/</b>"`, `EMPTY_DISPLAY = ""`
-- 핸들러 5개: `FrameManager` 의 모든 이벤트 구독 (`OnGameInitialized`, `OnFrameStarted`, `OnThrowRecorded`, `OnFrameCompleted`, `OnGameOver`)
-- 헬퍼 (순수 함수): `FormatFirstThrow(Frame)`, `FormatSecondThrow(Frame)`, `FormatFrameNumber(int)` (0-base → 1-base), `FormatTotalScore(int)`
-- 사이드이펙트 헬퍼: `ClearAllText()` — 유일하게 UI 갱신
-- 표시 규칙 결정사항:
-  - 1구 거터(`Ball1==0`) / 2구 0핀(`Ball2==0`)도 `"0"` 표시 (대시 사용 안 함)
-  - 스트라이크 시 `frame_N_sec` 의 `"-"` 는 `HandleFrameCompleted` 에서 채움 (`OnThrowRecorded(throw=2)` 가 발행되지 않으므로)
-  - `total_score_n` 은 `OnFrameCompleted` 시점에만 갱신 (사용자 요구사항 — throw 시점에 갱신하지 않음)
-  - `OnGameOver` 시 전체 클리어 (최종 점수는 별도 ResultUI 책임)
-- **Rich Text 전제**: TMP_Text `richText` 가 true 여야 `<b>X</b>` 가 동작. 기본값 true.
-- **폰트 주의**: 현재 씬 폰트는 `NotoSansKR-Black SDF` — 이미 weight 900 이라서 `<b>` 의 시각적 굵기 변화 거의 없음. 강조가 필요하면 색상/크기 태그로 변경 권장.
+#### `ScoreboardUI` (MonoBehaviour) — 2026-06-23 재작성 (이름 유지, 내부 완전 교체)
+- **책임**: FrameManager 이벤트 수집 + 누적 점수 / 현재 프레임 라벨 갱신만 담당. 화면 표시는 `ScoreboardLayoutRenderer` 구현체에 위임.
+- 직렬화 필드 (이름 변경 금지 — 씬 배선과 직결):
+  - `frameManager` (FrameManager) — `Bowling.Scoring` 어셈블리. Game.unity 의 GameManager(ⓑ) 의 FrameManager 컴포넌트 참조
+  - `layout` (`ScoreboardLayoutRenderer`) — **추상 베이스**. 인스펙터에서 `CardLayoutRenderer` (옵션 B, 현재) 또는 `TableLayoutRenderer` (옵션 C, 추후) 로 교체 가능
+  - `totalScoreText` (TMP_Text, 옵션) — 우측 큰 총점 ("TOTAL" 라벨 옆 숫자)
+  - `currentFrameLabel` (TMP_Text, 옵션) — "프레임 N / M구" 진행 상태
+- 핸들러 5개: FrameManager 의 모든 이벤트 구독 (`OnGameInitialized`, `OnFrameStarted`, `OnThrowRecorded`, `OnFrameCompleted`, `OnGameOver`) → 데이터 수집 후 `layout.*` 호출.
+- 누적 점수 계산: `FrameManager.GetTotalScore()` 직접 사용. 독립 프레임 점수 방식 특성 — 미완료 프레임의 `FrameScore=0` 이므로 `OnFrameCompleted` 시점의 `GetTotalScore()` 가 정확히 "그 프레임까지 누적".
+- 표시 규칙(`X`/`/`/숫자) 은 본 클래스가 모름 — `FrameCardUI.STRIKE_FIRST`/`STRIKE_SEC`/`SPARE_SEC`/`EMPTY` 상수에 캡슐화.
+- 로그 prefix `[Scoreboard]`.
+
+#### `ScoreboardLayoutRenderer` (abstract MonoBehaviour) — 2026-06-23 신설
+- 추상 메서드 6개:
+  - `Initialize(int frameCount)` — frameCount 만큼 카드/행 생성 (재초기화 시 기존 제거 후 새로)
+  - `UpdateThrow(int frameIndex, int throwNumber, Frame frame)` — 매 투구 직후
+  - `UpdateFrameComplete(int frameIndex, Frame frame, int cumulativeScore)` — 프레임 완료 직후
+  - `SetActiveFrame(int frameIndex)` — 현재 진행 강조 위치 이동
+  - `SetGameOver(int finalScore)` — 모든 강조 해제 + 종료 시각 마무리
+  - `ClearAll()` — 텍스트만 빈 상태로 (생성된 카드 유지)
+- 구현체:
+  - `CardLayoutRenderer` (옵션 B, 2026-06-23 구현) — 카드 그리드. `cardContainer` (Transform, HorizontalLayoutGroup) + `cardPrefab` (GameObject, FrameCardUI 부착)
+  - `TableLayoutRenderer` (옵션 C, **미구현** — 다음 세션) — 3행 테이블
+
+#### `FrameCardUI` (MonoBehaviour) — 카드 1개 prefab 컴포넌트
+- 위치: `Assets/Prefabs/FrameCard.prefab`
+- 직렬화 필드: `frameNumberLabel`, `throwsLabel`, `scoreLabel` (TMP_Text), `background`, `highlight` (Image), `normalBgColor`/`activeBgColor`/`gameOverBgColor`
+- 표시 규칙 상수 (단일 출처): `STRIKE_FIRST = "X"`, `STRIKE_SEC = "-"`, `SPARE_SEC = "/"`, `EMPTY = ""`
+- 공개 API: `SetFrameNumber(int)`, `SetThrows(Frame, int throwNumber)`, `SetCumulativeScore(int)`, `SetActive(bool)`, `SetGameOver()`, `Clear()`
+- 헬퍼 (순수 함수, public static): `FormatThrows(Frame, int throwNumber)` — "X  -" / "7  /" / "5  4" / 빈 칸 처리
 
 #### `MainMenuUI` (MonoBehaviour) — `mainmenu.unity` 의 Canvas 에 부착
 - 직렬화 필드 (5개, 인스펙터 배선 필수):
@@ -264,10 +290,11 @@ static int       CalculateTotalScore(List<Frame> frames);
 
 #### `SaveData` (`[Serializable]`)
 - `int version` (= 1), `List<GameRecord> highScores`, `string selectedBallSkin`, `string selectedCharacterSkin`
+- `float masterVolume` (=1.0f), `float sfxVolume` (=1.0f), `float bgmVolume` (=0.7f) — 0~1 선형. **구 save.json 호환**: 필드 미존재 시 `SaveSystem.NormalizeVolumes` 가 0f → 기본값으로 보정. 의도적 0(음소거) 표현은 향후 별도 mute 플래그로 분리 예정 (현재는 0=미마이그레이션으로 간주).
 
 #### `SaveSystem` (static)
 - `static string FilePath` — `Application.persistentDataPath/save.json`
-- `static SaveData Load()` — 파일 없음/파싱 실패 시 빈 `SaveData` 반환 (예외 전파 안 함)
+- `static SaveData Load()` — 파일 없음/파싱 실패 시 빈 `SaveData` 반환 (예외 전파 안 함). 음량 0f 감지 시 `NormalizeVolumes` 로 보정 후 반환
 - `static void Save(SaveData)` — `JsonUtility.ToJson(prettyPrint)` → `File.WriteAllText`. 실패 시 `LogWarning` 후 계속
 - **fail-safe 원칙**: 모든 I/O 가 예외를 게임 흐름에 전파하지 않음. 로그 prefix `[SaveSystem]`
 
@@ -279,6 +306,166 @@ static int       CalculateTotalScore(List<Frame> frames);
 - `static List<GameRecord> GetHighScores(string modeName)` — 모드별 정렬된 상위 목록
 - **모드별 분리**: `modeName` 기준 그룹화 (쇼트/풀 만점이 달라 통합 시 풀이 항상 이김). 로그 prefix `[HighScore]`
 - **연동**: `GameManager.OnEnterGameOver` 가 `Record(...)` 호출 후 결과를 `GameResultHolder.SetResult(score, mode, bestScore, isNewRecord)` 로 인계 → `GameOverUI` 가 표시
+
+### 3-8. 오디오 (2026-06-22 신설)
+
+> 네임스페이스 `BowlingGame`, 어셈블리 `Assembly-CSharp`. 위치: `Assets/Scripts/Audio/`. 로그 prefix `[Audio]`.
+
+#### `AudioManager` (MonoBehaviour, **싱글톤**, **DontDestroyOnLoad**)
+- 진입점: `mainmenu.unity` 루트의 `AudioManager` GameObject. `GameModeSelector` 와 동일한 패턴 (Awake 중복 self-destroy + DontDestroyOnLoad).
+- `static Instance` 노출.
+- 직렬화 필드 (이름 변경 금지 — 씬 배선과 직결):
+  - **Mixer**: `audioMixer` (AudioMixer), `sfxGroup` (AudioMixerGroup), `bgmGroup` (AudioMixerGroup)
+  - **Sources**: `sfxSource` (일회성 PlayOneShot 용 AudioSource, `outputAudioMixerGroup=SFX`), `rollSource` (지속 굴림 전용 AudioSource, `loop=true`, `outputAudioMixerGroup=SFX`)
+  - **Clips**: `pinHitClip`, `strikeClip`, `gutterClip`, `ballRollClip` (모두 `AudioClip`, **null 허용** — 미배선 시 LogWarning 후 무시)
+- 공개 재생 API:
+  - `void PlayPinHit()` / `PlayStrike()` / `PlayGutter()` — sfxSource.PlayOneShot
+  - `void StartBallRoll()` / `StopBallRoll()` — rollSource.Play/Stop (중복 호출 안전)
+- 공개 음량 API: `SetMasterVolume(float)` / `SetSFXVolume(float)` / `SetBGMVolume(float)` — 선형 0~1 입력, 내부에서 dB 변환 (`Log10(v)*20`, 0 입력은 -80dB 클램프)
+- 이벤트 구독 라이프사이클 — `SceneManager.sceneLoaded` 후크로 씬 전이마다 Unwire/Wire:
+  - `BowlingBall.OnFirstPinContact` → `PlayPinHit` + `StopBallRoll` (핀 접촉 순간 굴림 즉시 정지 — Rolling→Scoring 전이보다 빠른 청각 컷오프)
+  - `BowlingBall.OnEnteredGutter` → `PlayGutter`
+  - `FrameManager.OnFrameCompleted` → `frame.IsStrike()` 시 `PlayStrike` (GameManager `[DefaultExecutionOrder(1000)]` 보다 늦은 시점에 잡기 위해 2프레임 코루틴 폴백)
+  - `GameStateManager.OnStateChanged` → `next==Rolling` Start, `prev==Rolling && next!=Rolling` Stop (안전망 — 핀 미접촉 종료에서도 정지 보장)
+- 저장된 음량 복원: Start 에서 `SaveSystem.Load()` 호출 후 `ApplyVolumes` 로 mixer 에 반영.
+
+#### `AudioMixer` 자산 — `Assets/Audio/MainMixer.mixer`
+- 그룹 트리: `Master` → 자식 `SFX` (모든 효과음), `BGM` (예약 — 추후 배경음악)
+- **Exposed Parameters (이름 정확 일치 필수)**: `MasterVolume`, `SFXVolume`, `BGMVolume` (각 그룹의 Volume 파라미터)
+- 이 이름들은 `AudioManager.cs` 의 상수 `MasterParam`/`SfxParam`/`BgmParam` 과 동기화되어 있다. 한쪽만 변경하면 `SetFloat` 가 조용히 실패한다.
+
+#### 오디오 클립 (`Assets/Audio/`)
+- `ONHIT.wav` — pinHitClip 배선
+- `BALL_LAINROLL.wav` — ballRollClip 배선 (loop)
+- `379322__13fpanska_marval_lukas__bowling.wav` — 미사용 (추후 결정)
+- `strikeClip` / `gutterClip` 은 클립 미배선 상태 — null 이어도 게임 정상 진행 (LogWarning 만).
+
+#### `BowlingBall` 측 오디오 후크 (BowlingBall.cs)
+- `event Action OnFirstPinContact` — `OnCollisionEnter` 에서 Pin 컴포넌트 보유 콜라이더 충돌 시 1회 발화. 게이트: `hasPlayedPinHitThisThrow` 플래그
+- `event Action OnEnteredGutter` — `Update` 에서 `state==Rolling && IsInGutter` 폴링하여 1회 발화. 게이트: `hasEnteredGutterThisThrow` 플래그
+- 두 플래그 모두 `ResetBall(Vector3)` 의 마지막 단계에서 `hasLaunched=false` 와 함께 리셋 → 다음 투구 / 리스폰 시 재발화 가능
+
+#### 확장 가이드
+- BGM 추가 시: 별도 AudioSource (loop=true, `outputAudioMixerGroup=BGM`) 를 `bgmSource` SerializeField 로 추가 + `PlayBGM(AudioClip)`/`StopBGM` API. 씬 전이 시 자동 정지 처리는 BGM 정책에 따라 별도 결정.
+- 새 SFX 추가 시: `AudioClip newClip` SerializeField → `Play{Name}()` 메서드 → 이벤트 구독자(필요시) 등록. 표시 로직 인라인 금지 패턴(§7-12) 답습 — 핸들러는 `Play*` 호출만.
+- 충돌 세기·랜덤 피치는 현 단계 미적용 (제안 보류) — 추가 시 `PlayOneShotSafe` 시그니처에 volume / pitch 인자 추가.
+
+### 3-9. 설정 (2026-06-22 신설)
+
+> 네임스페이스 `BowlingGame`. 위치: `Assets/Scripts/Settings/`, `Assets/Scripts/UI/SettingsUI.cs`. 로그 prefix `[Settings]`.
+
+#### `SettingsApplier` (MonoBehaviour, **싱글톤**, **DontDestroyOnLoad**)
+- 진입점: `mainmenu.unity` 의 `SettingsApplier` GameObject. AudioManager / GameModeSelector 와 동일한 패턴.
+- `static Instance` 노출.
+- 책임: `SaveData` 의 사용자 설정을 카테고리별 시스템에 일괄 적용하는 **단일 라우터**. 카테고리별 구현은 해당 시스템(AudioManager 등) 에 위임.
+- `Start` 에서 `RefreshFromSave()` 1회 자동 호출.
+- 공개 API: `RefreshFromSave()` — 설정 UI 변경 후 외부에서 호출 가능 (전 시스템 재동기화).
+- 현재 적용 카테고리: 오디오만. 디스플레이 / 접근성 / 입력은 SaveData 필드 추가 후 다음 세션에 `ApplyXxx(save)` 한 줄씩 추가.
+
+#### `SettingsUI` (MonoBehaviour) — `settings.unity` 의 `SettingsPanel` 에 부착
+- 직렬화 필드 (이름 변경 금지):
+  - **탭**: `tabPanels[5]` (GameObject 배열, 인덱스 0=Audio, 1=Display, 2=Controls, 3=Accessibility, 4=UX), `tabButtons[5]` (Button 배열, 같은 인덱스), `defaultTab` (int, 기본 0)
+  - **Audio 탭**: `masterSlider`, `sfxSlider`, `bgmSlider` (Slider, 0~1), `muteToggle` (Toggle), `masterValueLabel`, `sfxValueLabel`, `bgmValueLabel` (TMP_Text)
+  - **Controls 탭**: `rebindKeyboardButton`, `rebindGamepadButton`, `resetControlsButton` (Button), `keyboardBindingLabel`, `gamepadBindingLabel`, `connectedDeviceLabel` (TMP_Text), `rebindOverlay` (GameObject, 평소 비활성), `rebindOverlayLabel` (TMP_Text "키를 누르세요" / "버튼을 누르세요")
+  - **Footer**: `backToMainMenuButton` (Button), `mainMenuSceneName` (string, 기본 `"mainmenu"`)
+- 값 변경 흐름 (Audio): `Slider.onValueChanged` → 로컬 `_saveCache` 갱신 → `AudioManager.Instance.SetXxxVolume` 즉시 호출 → `SaveSystem.Save(_saveCache)` → 라벨 갱신
+- 값 변경 흐름 (Controls): 재설정 버튼 → `InputController.ConfirmAction.PerformInteractiveRebinding(idx).WithControlsExcluding(...).WithCancelingThrough("<Keyboard>/escape").OnComplete(...)` → 완료 시 `SaveBindingOverridesJson` → `_saveCache.inputOverridesJson` 갱신 → Save → 라벨 갱신. 리바인딩 중 confirmAction 은 Disable.
+- 초기화 시 `_initializingUI` 가드로 UI 동기화 중 발화되는 콜백이 불필요 Save 를 호출하지 않게 차단.
+- `OnDestroy` 에서 진행 중 `_activeRebind` 가 있으면 Dispose + confirmAction Enable 복구 (씬 전환 누수 방지).
+- Display / Accessibility / UX 탭은 placeholder TMP ("준비 중") 만 표시. 다음 세션에 채워짐.
+
+#### `settings.unity` 구조 — `Build Settings index 3`
+```
+settings.unity
+├── Main Camera (Camera + AudioListener)
+├── Directional Light
+├── EventSystem (EventSystem + InputSystemUIInputModule)
+└── Canvas (ScreenSpaceOverlay, 1920×1080 ScaleWithScreenSize, GraphicRaycaster)
+    └── SettingsPanel (Image 배경 + SettingsUI)
+        ├── Header (TMP "설정")
+        ├── TabBar (HorizontalLayoutGroup, 5 Tab_* 버튼)
+        │   ├── Tab_Audio / Tab_Display / Tab_Controls / Tab_Accessibility / Tab_UX
+        ├── Content
+        │   ├── AudioPanel (VerticalLayoutGroup)
+        │   │   ├── Row_Master (Label "마스터" + Slider + Value "100%")
+        │   │   ├── Row_SFX
+        │   │   ├── Row_BGM
+        │   │   └── Row_Mute (Label + Toggle_Mute + Spacer)
+        │   ├── ControlsPanel (VerticalLayoutGroup)
+        │   │   ├── Row_Keyboard (Label "확정 (키보드)" + ValueFrame "Space" + RebindButton "재설정")
+        │   │   ├── Row_Gamepad  (Label "확정 (게임패드)" + ValueFrame "A / Cross" + RebindButton "재설정")
+        │   │   ├── Row_Device   (Label "연결된 컨트롤러" + DeviceName)
+        │   │   └── Row_Reset    (ResetButton "기본값 복원")
+        │   ├── DisplayPanel / AccessibilityPanel / UXPanel (placeholder)
+        ├── RebindOverlay (평소 비활성 — 리바인딩 중 화면 위에 어둡게 덮음, GraphicRaycaster 로 입력 차단)
+        └── BackButton ("메인메뉴" — onClick: SceneManager.LoadScene("mainmenu"))
+```
+
+#### `MainMenuUI` 갱신 (2026-06-22)
+- `settingsButton` SerializeField (옵셔널, null 허용), `settingsSceneName` (string 기본 `"settings"`) 추가.
+- `OnSettingsClicked` → `SceneManager.LoadScene(settingsSceneName)`.
+- mainmenu 의 Canvas 자식에 `SettingsButton` GameObject 신설 (ShortButton/FullButton 아래, y=-300, label "설정").
+
+#### 확장 가이드
+- 새 탭 채우기: `SettingsUI` 의 Audio 탭과 동일 패턴 — SerializeField 추가 → BindXxxTab() → OnXxxChanged() 핸들러 → SaveSystem.Save. 표시 로직 인라인 금지 패턴(§7-12) 답습.
+- 새 카테고리 시스템 적용: `SettingsApplier` 에 `Apply{Category}(save)` 메서드 추가 + `RefreshFromSave` 에 호출 줄 추가.
+- 설정 화면이 다중 진입점(mainmenu 외에 Game 중 ESC 등) 을 가지려면 settings 씬 대신 DontDestroyOnLoad 패널로 전환 필요 — 현재 구조는 mainmenu → settings 전용.
+
+### 3-10. 타이틀 / 대기 화면 (2026-06-23 신설, Cinemachine 기반)
+
+> 네임스페이스 `BowlingGame`. 위치: `Assets/Scripts/UI/TitleScreenController.cs`. 로그 prefix `[Title]`.
+> 의존 패키지: `com.unity.cinemachine` 3.1.7 (Unity 6 호환).
+
+#### `TitleScreenController` (MonoBehaviour) — `title.unity` 의 TitleCanvas 에 부착
+- 진입: 앱 실행 시 첫 씬 (Build Settings idx 0). 입력 감지 시 `SceneManager.LoadScene(mainMenuSceneName)` 로 mainmenu 전환.
+- **`CinematicShot` (Serializable struct)** — Cinemachine 기반:
+  - `string label`
+  - `CinemachineCamera virtualCamera` — 인스펙터에서 vcam GameObject 의 시작 위치/회전, LookAt slot 설정
+  - `Vector3 endPosition` — 시작 위치(vcam.transform.position)에서 endPosition 으로 SmoothStep 보간
+  - `float duration` / `fadeInTime` / `fadeOutTime` / `holdAtBlack`
+- 직렬화 필드 (이름 변경 금지):
+  - `shots` (`CinematicShot[]`) — 인스펙터 조정. 초기 3샷: Pin Closeup → PinVCam / Ball Closeup → BallVCam / Lane Overview → LaneVCam
+  - `fadeImage` (Image) — TitleCanvas 의 FadePanel
+  - `anyKeyHint` (TMP_Text, 옵션)
+  - `versionLabel` (TMP_Text, 옵션) — Start 에서 `"v" + Application.version` 자동
+  - `anyKeyBlinkInterval` (0.8) / `transitionFadeOutTime` (0.4) / `mainMenuSceneName` ("mainmenu")
+- **샷 라이프사이클**:
+  1. PlayShot 진입 시 활성 vcam 의 Priority 를 10, 나머지 1 로 설정 — 페이드 hold 동안 컷 전환되어 사용자 비가시
+  2. `cachedStartPositions[idx]` 의 시작 좌표 복원 (인스펙터 값)
+  3. 페이드 인 → vcam.transform.position 을 `Mathf.SmoothStep` 으로 보간 (ease-in-out) → 페이드 아웃 → 시작 위치 복원 → hold
+  4. 회전은 vcam 의 LookAt 슬롯이 자동 처리 (카메라 이동 중에도 target 응시)
+- 입력 감지: `Update` 폴링 — Keyboard anyKey + Mouse 3버튼 + Gamepad 8버튼
+
+#### `title.unity` 구조 — Build Settings index 0 (Cinemachine 기반)
+```
+title.unity
+├── Main Camera         (Camera + AudioListener + CinemachineBrain — Default Blend EaseInOut)
+├── Directional Light
+├── Ground
+├── Lane_Root           (Game.unity 와 동일 비주얼)
+├── BowlingBall         (Rigidbody.isKinematic=true, 컴포넌트 비활성)
+├── EventSystem
+├── CinematicTargets    (LookAt 더미 컨테이너)
+│   ├── PinTarget       (0, 0.5, 9.5)  — 핀 모인 위치
+│   ├── BallTarget      (볼 위치)
+│   └── LaneTarget      (2, 0.3, 8)    — vcam 좌측 + 정면 lane 방향 응시
+├── PinVCam             (CinemachineCamera + CinemachineRotationComposer, Position=(0.5, 1.8, 5), LookAt=PinTarget, Priority=10 활성)
+├── BallVCam            (CinemachineCamera + CinemachineRotationComposer, Position=(-0.4, 0.4, -0.3), LookAt=BallTarget, Priority=1)
+├── LaneVCam            (CinemachineCamera + CinemachineRotationComposer, Position=(-3, 2.2, 0), LookAt=LaneTarget, Priority=1)
+└── TitleCanvas (ScreenSpaceOverlay 1920×1080, TitleScreenController 부착)
+    ├── AnyKeyHint     (TMP "아무 키나 누르세요", 화면 가운데 하단)
+    ├── VersionLabel   (TMP "v" + Application.version, 우측 하단)
+    ├── FadePanel      (Image 전체 stretch, 검은 알파 1 시작)
+    └── GameTitle      (TMP "Bowling Champion", 화면 상단 가운데, 120pt — 자식 인덱스 마지막 = FadePanel 위, 항상 표시)
+```
+- vcam 의 인스펙터 Position = 샷 시작 위치. 보간 종료 위치는 TitleScreenController.shots[i].endPosition 슬롯.
+- LookAt 더미 GameObject 를 이동/회전하면 모든 vcam 의 응시 대상이 자동 변경 (예: 핀 배치 변경 시 PinTarget 만 옮기면 됨).
+- Pin (10개) Rigidbody.isKinematic + Pin 컴포넌트 비활성 — 정적 디스플레이.
+
+#### Cinemachine 가 가져온 변화 (수동 Lerp 대비)
+- **회전 자동화** — LookAt 슬롯만 설정하면 카메라 이동에 따라 자연스럽게 응시. 이전 `startEuler`/`endEuler` 슬롯 제거.
+- **시각 디버깅** — Scene View 에 vcam Gizmo + Frustum + 추적 라인 표시. 좌표 조정이 쉬워짐.
+- **확장 여지** — 추후 Game 씬 카메라까지 Cinemachine 으로 통일 시 `CameraFollow.cs` 대체 가능 (현재 보류).
 
 ---
 
@@ -356,7 +543,7 @@ pinManager.ResetAllPins()
 | `GameStateManager` | `BowlingGame` | 위와 혼동 금지 |
 | `FrameManager` | `Bowling.Scoring` | **도메인 네임스페이스에 있음**. `BowlingGame` 아님 |
 | `BowlingRuleConfig` | `BowlingGame` | **게임 네임스페이스에 있음**. `Bowling.Scoring` 아님 |
-| `Instance` | 5개 클래스 모두 사용 | `GameManager.Instance`, `GameStateManager.Instance`, `InputController.Instance`, `GameModeSelector.Instance` — 정확한 타입 명시. `GameModeSelector` 는 DontDestroyOnLoad 라 씬 전이 후에도 살아있음 |
+| `Instance` | 7개 클래스 모두 사용 | `GameManager.Instance`, `GameStateManager.Instance`, `InputController.Instance`, `GameModeSelector.Instance`, `AudioManager.Instance`, `SettingsApplier.Instance` — 정확한 타입 명시. `GameModeSelector` / `AudioManager` / `SettingsApplier` 는 DontDestroyOnLoad 라 씬 전이 후에도 살아있음 |
 | `OnStateChanged` | `GameStateManager` 이벤트 | 다른 클래스에서 같은 이름 안 씀 (예약) |
 | `OnConfirmPressed` | `InputController` 이벤트 | 단일 입력 이벤트 — 다른 키 추가 시 같은 이름 재사용 금지 |
 | `ConfirmedPosition` / `ConfirmedNormalized` | BallAimer / PowerGaugeUI | 각각 위치(Vector3) / 세기(float 0~1) — 혼동 주의 |
@@ -369,9 +556,7 @@ pinManager.ResetAllPins()
 | `Ball1` / `Ball2` (Frame) | `int` | 스트라이크 시 `Ball2 = 0` 으로 유지 — "굴리지 않음" 표현용 |
 | `BallSpeed` (BowlingRuleConfig) vs `oscSpeed` (BallAimer) | 다른 의미 | Config 는 데이터, BallAimer 는 실제 사용값. 현재는 BallAimer 에 직접 직렬화돼 있음 — 향후 통합 시 주의 |
 | `PowerGaugeSpeed` (Config) vs `gaugeSpeed` (PowerGaugeUI) | 같음 | 위와 동일 통합 미완료 |
-| `total_score` (씬 GameObject) vs `total_score_n` (자식 GameObject) | 다른 노드 | 부모는 "TOTAL SCORE" 라벨용 TMP, 자식이 실제 숫자 표시 TMP. `ScoreboardUI.totalScoreText` 는 **자식** 노드를 가리킨다 |
-| `current_frame` vs `frame_n` | 위와 동일 패턴 | 부모는 라벨, 자식이 숫자. `ScoreboardUI.currentFrameText` 는 자식 |
-| `frame_N_first`, `frame_N_sec` | Canvas 직속 | 위와 달리 별도 라벨 없이 직접 텍스트만 표시 |
+| ~~`total_score`/`total_score_n`/`current_frame`/`frame_n`/`frame_N_first`/`frame_/`/`frame_N_sec`~~ | 2026-06-23 **제거됨** | 점수판 재작성 — 카드 그리드 (CardLayoutRenderer) 기반으로 전환. `ScoreboardTop/CardContainer/TotalScorePanel/CurrentFrameLabel` 신규 노드 참조 |
 | `Canvas` vs `HUD_Canvas` | Game.unity 의 두 Canvas | 점수판은 `Canvas`(layer=UI, 5개 자식) 측. `HUD_Canvas` 는 다른 HUD 용도(자식 1개) |
 | `Canvas` (Game.unity) vs `Canvas` (mainmenu.unity) | 다른 씬, 같은 이름 | Game.unity 의 Canvas 는 ScoreboardUI, mainmenu.unity 의 Canvas 는 MainMenuUI. 씬을 먼저 명시 |
 | `ruleConfig` (인스펙터) vs `SelectedRule` (ModeSelector) | GameManager 의 두 룰 소스 | Start() 첫 분기에서 SelectedRule 이 있으면 ruleConfig 덮어쓰기. 인스펙터는 폴백 (Game.unity 단독 Play 호환). 둘 다 유지 |
@@ -397,6 +582,15 @@ pinManager.ResetAllPins()
 14. **`mainmenu.unity` 의 `GameModeSelector` GameObject** — DontDestroyOnLoad 의 진입점. 제거 시 모드 전달 끊김. 중복 배치도 금지 (Awake 에서 자기 자신 Destroy 처리됨).
 15. **`BowlingBall.ResetBall` 의 6단계 순서** — `Physics.SyncTransforms()` / `rb.Sleep()` 누락 시 스트라이크/스페어 후 y 드리프트 회귀. Unity 6 의 `autoSyncTransforms=false` + Interpolation + ContinuousDynamic CCD 결합에서 발생하는 stale Rigidbody.position / 누적 internal state 문제를 대처. 자세한 진단은 `SESSION_2026-06-05.md` §2 참조.
 16. **공 위치 리셋 경로 단일화** — 현재 `GameManager.BeginGame` 과 `ThrowTransitionController.HandlePostThrow` 두 곳만 `ball.ResetToStartPosition()` 호출. `BowlingBall.HandleStateChanged` 의 AimingPosition 분기에 리셋 로직 다시 넣지 말 것 (이중 호출 → §4-1 시퀀스 깨짐).
+17. **`AudioManager` 의 `[SerializeField]` 필드명** (`audioMixer`, `sfxGroup`, `bgmGroup`, `sfxSource`, `rollSource`, `pinHitClip`, `strikeClip`, `gutterClip`, `ballRollClip`) — 변경 시 `mainmenu.unity` 의 와이어링이 끊김.
+18. **AudioMixer `MainMixer.mixer` 의 Exposed Parameter 이름** (`MasterVolume`, `SFXVolume`, `BGMVolume`) — `AudioManager.cs` 의 상수와 동기화되어 있어 한쪽만 변경 시 `SetFloat` 가 조용히 실패하여 음량 조절 불가.
+19. **`BowlingBall.OnFirstPinContact` / `OnEnteredGutter` 이벤트 1회 발화 게이트** — `hasPlayedPinHitThisThrow` / `hasEnteredGutterThisThrow` 플래그는 `ResetBall(Vector3)` 의 마지막 단계에서만 리셋된다. 다른 곳에서 임의로 리셋 시 한 투구당 여러 번 발화 발생.
+20. **`SettingsUI` 의 `[SerializeField]` 필드명** (`tabPanels`, `tabButtons`, `defaultTab`, `masterSlider`, `sfxSlider`, `bgmSlider`, `muteToggle`, `masterValueLabel`, `sfxValueLabel`, `bgmValueLabel`, `backToMainMenuButton`, `mainMenuSceneName`) — 변경 시 `settings.unity` 의 와이어링 끊김.
+21. **`SaveData.isMuted` 의 의미** — "사용자가 의도적으로 음소거함" 의 영구 상태. 음량 0 (`NormalizeVolumes` 가 미마이그레이션으로 간주) 과 분리되어야 한다. 음소거 UI 는 반드시 `AudioManager.SetMuted(bool)` 만 호출, 음량 슬라이더는 0 으로 내리지 말 것.
+22. **`InputController.KeyboardBindingIndex` / `GamepadBindingIndex` 상수 값** (각각 0, 1) — `SaveData.inputOverridesJson` 의 직렬화 결과가 binding 순서에 의존. binding 추가 순서를 바꾸면 구 save.json 의 override 가 잘못된 binding 에 적용된다. 새 binding 추가는 반드시 **끝에 append**.
+23. **`ScoreboardUI` 의 `layout` 필드를 `ScoreboardLayoutRenderer` 추상 타입으로 유지** — CardLayoutRenderer 직접 타입 캐스팅 금지. 추후 TableLayoutRenderer 추가 시 인스펙터 교체만으로 전환 가능해야 함.
+24. **`FrameCardUI.STRIKE_FIRST/SEC` / `SPARE_SEC` / `EMPTY` 상수 값** — 도메인(Frame/FrameManager/ScoreCalculator) 에 표시 문자열 도입 금지 패턴의 단일 출처. 변경 시 카드 표시 일관성 깨짐.
+25. **각 Cinemachine vcam 의 `CinemachineRotationComposer` (또는 다른 Aim) 컴포넌트** — 제거 시 LookAt 슬롯이 무시되고 vcam Transform 회전이 그대로 사용되어 카메라가 엉뚱한 방향을 응시한다. Cinemachine 3.x 의 기본 동작 — Body / Aim 컴포넌트가 없으면 LookAt / Follow 자동 처리 안 됨.
 
 ---
 
@@ -458,7 +652,7 @@ UI 작업 시 어느 노드를 가리켜야 하는지 빠르게 확인하기 위
 - `Ground` — MeshCollider
 - `Lane_Root` — 레인/거터/핀 하위 그룹 (자식 6)
 - `BowlingBall` — Rigidbody + **BowlingBall** + **BallAimer**
-- `GameManager` ⓐ — **GameStateManager** + **InputController** + **DebugResetController**
+- `GameManager` ⓐ — **GameStateManager** + **InputController** (mainmenu 경유 진입 시 컴포넌트만 self-destroy — mainmenu 의 InputController 가 활성) + **DebugResetController**
 - `GameManager` ⓑ — **GameManager** + **PhysicsSettleDetector** + **ThrowTransitionController** + **FrameManager**
 - `HUD_Canvas` — 별도 Canvas (자식 1개, 점수판과 무관)
 - `EventSystem` — InputSystemUIInputModule
@@ -466,25 +660,41 @@ UI 작업 시 어느 노드를 가리켜야 하는지 빠르게 확인하기 위
 
 > **GameManager 두 개는 의도된 분리**. ScoreboardUI 인스펙터 배선 시 `frameManager` 필드는 ⓑ 쪽 FrameManager 컴포넌트를 가리킨다.
 
-### 11-2. Game.unity Canvas 자식 (점수판 영역)
+### 11-2. Game.unity Canvas 자식 (점수판 영역, 2026-06-23 재작성)
 ```
-Canvas
-├── total_score                    (TMP_Text: "TOTAL SCORE" 라벨)
-│   └── total_score_n              (TMP_Text: 누적 점수 숫자)   ← ScoreboardUI.totalScoreText
-├── current_frame                  (TMP_Text: "FRAME" 라벨)
-│   └── frame_n                    (TMP_Text: 프레임 번호)       ← ScoreboardUI.currentFrameText
-├── frame_N_first                  (TMP_Text: 1구 결과)          ← ScoreboardUI.frameFirstText
-├── frame_/                        (TMP_Text: "/" 시각적 구분자, 정적)
-└── frame_N_sec                    (TMP_Text: 2구 결과)          ← ScoreboardUI.frameSecText
+Canvas (ScoreboardUI + CardLayoutRenderer 부착)
+├── ScoreboardTop                  (RectTransform, 상단 stretch, height=200)
+│   ├── CardContainer              (Transform, HorizontalLayoutGroup) ← CardLayoutRenderer.cardContainer
+│   │   └── (FrameCard prefab 인스턴스들, Initialize 시 frameCount 만큼 동적 생성)
+│   └── TotalScorePanel            (Image 배경 + 자식 2개)
+│       ├── TotalLabel             (TMP_Text "TOTAL")
+│       └── TotalValue             (TMP_Text 큰 숫자)            ← ScoreboardUI.totalScoreText
+└── CurrentFrameLabel              (TMP_Text "프레임 N / M구")    ← ScoreboardUI.currentFrameLabel
 ```
 
-### 11-3. mainmenu.unity 루트 GameObject (6개)
+기존 `total_score` / `total_score_n` / `current_frame` / `frame_n` / `frame_N_first` / `frame_/` / `frame_N_sec` 노드는 2026-06-23 에 모두 제거됨.
+
+FrameCard prefab 자식 구조 (`Assets/Prefabs/FrameCard.prefab`):
+```
+FrameCard (RectTransform 140×180, FrameCardUI + LayoutElement preferredWidth=140)
+├── Background      (Image)                              ← FrameCardUI.background
+├── Highlight       (Image, 비활성 시작, 노란 alpha=0.25) ← FrameCardUI.highlight (옵션)
+└── Content         (VerticalLayoutGroup)
+    ├── FrameNumber (TMP_Text 22pt, 회색)                ← FrameCardUI.frameNumberLabel
+    ├── Throws      (TMP_Text 42pt)                      ← FrameCardUI.throwsLabel
+    └── Score       (TMP_Text 36pt, 연한 청색)            ← FrameCardUI.scoreLabel
+```
+
+### 11-3. mainmenu.unity 루트 GameObject (9개, 2026-06-22 갱신)
 - `Main Camera` — Camera + AudioListener + UniversalAdditionalCameraData
 - `Directional Light`
 - `Global Volume` — URP Volume (기본)
 - `GameModeSelector` — **GameModeSelector** (DontDestroyOnLoad 진입점, Game.unity 로 살아서 넘어감)
+- `AudioManager` — **AudioManager** + AudioSource×2 (sfxSource / rollSource, 둘 다 outputAudioMixerGroup=SFX). DontDestroyOnLoad 진입점
+- `SettingsApplier` — **SettingsApplier** (DontDestroyOnLoad 진입점, SaveData 라우터)
+- `InputController` — **InputController** (DontDestroyOnLoad 진입점, settings/Game 으로 살아서 넘어감 — 리바인딩 / 게임패드 binding 보유)
 - `EventSystem` — EventSystem + InputSystemUIInputModule
-- `Canvas` — Canvas (ScreenSpaceOverlay) + CanvasScaler (ScaleWithScreenSize, 1920×1080) + GraphicRaycaster + **MainMenuUI**
+- `Canvas` — Canvas (ScreenSpaceOverlay) + CanvasScaler (ScaleWithScreenSize, 1920×1080) + GraphicRaycaster + **MainMenuUI**. 자식: Title / ShortButton / FullButton / **SettingsButton** (y=-300)
 
 ### 11-4. mainmenu.unity Canvas 자식 (3개)
 ```
@@ -556,4 +766,4 @@ Play (mainmenu, build index 0) → 버튼 클릭 시 다음 로그 순서가 보
 
 *이 문서는 코드 변경과 함께 갱신되어야 함. 시그니처·이벤트·필드명이 본 문서와 코드 사이에서 어긋나는 경우, **코드를 기준으로 본 문서를 수정**한다.*
 
-*최종 갱신: 2026-06-19 (Phase 8 영속화 ✅ 완료 — `SaveSystem`/`HighScoreService` 컴파일·Gameover_scene 배선·프로그램 검증 PASS. Build Settings 정리 — canonical `Assets/Scenes/Game.unity` 만 인덱스 1. 레인 비주얼 — `Mat_Lane` 변형 전환 + Mat_Lane 1/2/3 신규)*
+*최종 갱신: 2026-06-23 (타이틀 화면 vcam 좌표 미세 조정 — PinVCam Position 최종 `(0.5, 1.8, 5)`, LaneVCam `(-3, 2.2, 0)`, LaneTarget `(2, 0.3, 8)`. 각 vcam 에 `CinemachineRotationComposer` Aim 컴포넌트 추가 — Cinemachine 3.x 에서 LookAt 동작에 필수. §7-25 절대 건드리지 말 것 항목 추가)*
