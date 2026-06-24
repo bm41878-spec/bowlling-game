@@ -104,3 +104,13 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Unity Editor 자동 복구 폴더 (Assets/_Recovery — 비정상 종료 시 백업 씬 보관소)
+/[Aa]ssets/_[Rr]ecovery/
+/[Aa]ssets/_[Rr]ecovery.meta
+
+# 개발 중 스크린샷 (검증/테스트용, 산출물 아님)
+/[Aa]ssets/[Ss]creenshots/
+
+# 배포용 압축 빌드 (Build/ 폴더는 이미 ignored; 별도 zip 아카이브도 제외)
+/[Bb]uild*.zip

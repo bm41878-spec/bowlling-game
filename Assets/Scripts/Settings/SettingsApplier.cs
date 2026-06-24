@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace BowlingGame
 {
@@ -30,12 +31,29 @@ namespace BowlingGame
             }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // 씬 전이마다 UI 스케일 재적용 — 새 씬의 CanvasScaler 들에 다시 적용해야 한다 (DisplaySetter.ApplyUIScale 은 활성 씬만 스캔).
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        void OnDestroy()
+        {
+            if (Instance == this)
+                SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
         void Start()
         {
             RefreshFromSave();
             Debug.Log($"{LogPrefix} 초기화 완료 — DontDestroyOnLoad 활성");
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            // 추가 씬 (additive) 은 무시 — 새 단일 씬 진입 시에만 적용.
+            if (mode != LoadSceneMode.Single) return;
+            var save = SaveSystem.Load();
+            DisplaySetter.ApplyUIScale(save.uiScale);
         }
 
         /// <summary>
@@ -47,9 +65,8 @@ namespace BowlingGame
             var save = SaveSystem.Load();
             ApplyAudio(save);
             ApplyInput(save);
-            // 다음 세션에 추가될 카테고리들 (자리만 남김 — 실제 구현은 SaveData 필드 추가 이후):
-            // ApplyDisplay(save);
-            // ApplyAccessibility(save);
+            ApplyDisplay(save);
+            ApplyAccessibility(save);
         }
 
         // ---------- 카테고리별 적용 ----------
@@ -74,6 +91,22 @@ namespace BowlingGame
         {
             if (InputController.Instance == null) return;
             InputController.Instance.LoadBindingOverridesJson(save.inputOverridesJson);
+        }
+
+        private void ApplyDisplay(SaveData save)
+        {
+            // 해상도 / 창 모드는 정적 호출 — 씬 의존 없음.
+            DisplaySetter.ApplyResolution(save.screenWidth, save.screenHeight, (FullScreenMode)save.fullScreenMode);
+            // UI 스케일은 활성 씬의 CanvasScaler 들 대상 — sceneLoaded 후크에서 재적용되지만 초기 진입(mainmenu) 에서도 한 번 호출.
+            DisplaySetter.ApplyUIScale(save.uiScale);
+        }
+
+        // 접근성: 현재는 라우터에 자리만. aimingAudioGuide 는 BallAimer 가 AimingPosition 진입 시점에
+        // SaveSystem.Load 로 직접 캐싱하므로 본 메서드에서 runtime 상태를 푸시할 대상이 없다.
+        // colorblindMode 는 실제 구현 (Color Adjust / Renderer Feature) 추가 시 여기서 적용 호출.
+        private void ApplyAccessibility(SaveData save)
+        {
+            // 자리 표시 — 향후 색맹 모드 실제 적용 시 ColorblindFilter.Apply(save.colorblindMode) 등 호출.
         }
     }
 }

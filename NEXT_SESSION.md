@@ -1,6 +1,64 @@
 # 다음 세션 재개 가이드
 
-> **작성일**: 2026-06-23 (점수판 UI 재제작 + 타이틀/대기 화면 신설)
+> **작성일**: 2026-06-24 (Display 탭 완성 + Windows64 첫 빌드 + Gameover UI 재배치)
+
+---
+
+## 0000. 2026-06-24 세션 종합 — 3단계로 진행
+
+### 단계 1 — Display 탭 완성 + DisplaySetter 신설
+
+| 항목 | 변경 |
+|---|---|
+| `SaveData` 디스플레이 4필드 | `screenWidth=1920`, `screenHeight=1080`, `fullScreenMode=1`(FullScreenWindow), `uiScale=1.0f` |
+| `SaveSystem.NormalizeDisplay` 마이그레이션 | `uiScale==0` sentinel 감지 → 디스플레이 4필드 일괄 기본값 복원 |
+| `DisplaySetter.cs` 정적 클래스 신설 | `Assets/Scripts/Settings/`. `GetSupportedResolutions` (중복 제거 + 캐싱) / `ApplyResolution` (Screen.SetResolution 래핑) / `ApplyUIScale` (활성 씬 CanvasScaler 들의 referenceResolution = `1920/scale × 1080/scale`) / `IndexToMode` / `ModeToIndex` |
+| `SettingsApplier` 갱신 | `ApplyDisplay(save)` 추가 + `RefreshFromSave` 에 호출 줄. `SceneManager.sceneLoaded` 후크로 씬 전이 시 UI 스케일 재적용 (Single 모드만) |
+| `SettingsUI` Display 탭 | SerializeField 4개 (`resolutionDropdown`, `windowModeDropdown`, `uiScaleSlider`, `uiScaleValueLabel`) + `BindDisplayTab` + 3개 핸들러. Audio 탭과 동일한 즉시 적용 + Save 패턴 |
+| `settings.unity` DisplayPanel | Placeholder 제거 → VerticalLayoutGroup + 3개 row (Row_Resolution / Row_WindowMode / Row_UIScale). MCP `execute_code` + reflection 으로 `TMPro.TMP_DefaultControls.CreateDropdown` 호출하여 TMP_Dropdown 동적 생성 (TMP_DefaultControls 는 internal class → reflection 필요) |
+
+**Play 모드 검증 통과**: 해상도 드롭다운 24개 자동 채움 (1920×1080 자동 선택), 창모드 3옵션, UI 스케일 1.0→1.2 변경 시 CanvasScaler.referenceResolution 1920×1080 → **1600×900** 정확 갱신 + save.json 영속화.
+
+⚠️ **Editor 한계**: `Screen.SetResolution` 은 Editor Game View 에 영향 없음 — 해상도/창모드의 시각 효과는 Standalone 빌드에서만 확인됨. 이게 단계 2 의 동기.
+
+### 단계 2 — Windows64 Standalone Development Build (첫 빌드 + 재빌드)
+
+| 항목 | 변경 |
+|---|---|
+| `Assets/Audio/iCertPrintClientSetup.exe` 삭제 | `manage_asset action=delete` — 잘못 들어온 설치 파일 + `.meta` 동반 제거 |
+| `.gitignore` 점검 | `/Build/` 이미 포함 — 추가 작업 불필요 |
+| `Build/Win64/bowling demo.exe` 생성 | `manage_build action=build target=windows64 output_path="Build/Win64/bowling demo.exe" development=true` — 첫 빌드 약 90초 소요. 총 185 MB |
+| 빌드 검증 (사용자 실사용) | 사용자가 .exe 실행 후 정상 작동 확인. 그러나 게임 종료 화면에서 **UI 겹침 버그 발견** → 단계 3 으로 |
+| 재빌드 | UI 수정 후 `Build/Win64/` 동일 위치 덮어쓰기. Incremental build 약 9초. 292 파일 갱신 (level0~4, Assembly-CSharp.dll, sharedassets) — `.exe` launcher 자체는 변경 없음 (정상 동작, Unity Player bootstrap) |
+
+**빌드 구조**:
+```
+Build/Win64/
+├── bowling demo.exe              (667 KB — Unity Player bootstrap, 거의 변경 없음)
+├── bowling demo_Data/            (게임 자산 + Managed dll. 재빌드 시 갱신)
+│   ├── level0~level4             (5개 씬: title, mainmenu, Game, Gameover_scene, settings)
+│   ├── Managed/Assembly-CSharp.dll  (게임 코드)
+│   ├── sharedassets*.assets       (텍스처/사운드/메시 등)
+│   └── ...
+├── UnityPlayer.dll                (85 MB — Unity 엔진)
+├── UnityCrashHandler64.exe
+└── MonoBleedingEdge/              (스크립팅 런타임)
+```
+
+**다른 PC 전달 시**: `Build/Win64/` 폴더 전체를 ZIP 으로. `.exe` 만 보내면 실행 불가.
+
+### 단계 3 — Gameover UI 재배치 (사용자 보고 버그 수정)
+
+**근본 원인**: `Gameover_scene.unity` 의 Canvas 가 `CanvasScaler.ConstantPixelSize 800×600` 으로 설정되어 있었음. 다른 씬은 모두 `ScaleWithScreenSize 1920×1080` 통일 (§11-5). 이 불일치로 인해 1920×1080 빌드에서 UI 가 화면 일부에 800×600 비례로 압축되고, 좌표가 가까이 잡혀 있던 요소들이 모두 겹침.
+
+| 변경 | 내용 |
+|---|---|
+| `Gameover_scene.unity` Canvas | `ConstantPixelSize 800×600` → `ScaleWithScreenSize 1920×1080 match=0.5` (§11-5 통일) |
+| 5개 UI 요소 재배치 (anchor=center, pivot=center) | `new_record` y=+370 fs=90 / `gameover_score` y=+100 fs=220 (기존 300 → 축소) / `best_score` y=-140 fs=56 / `Mainmenu_button` y=-300 size=360×90 / `Quit_button` y=-410 size=360×90 |
+| 버튼 텍스트 폰트 | 24pt (잘림) → 36pt (90px 높이에 적절) |
+| `mainmenu.unity` Title | pos (-100, -150) → (0, -150) 가운데 정렬 보정 |
+
+**시각 검증 통과**: `ScreenCapture.CaptureScreenshot` 으로 신기록 시나리오 캡처 — 신기록!/150/최고 점수: 100/메인메뉴/게임종료 5개 요소 모두 깔끔하게 분리, 겹침 없음.
 
 ---
 
@@ -67,14 +125,15 @@
 
 | # | 항목 | 비고 |
 |---|---|---|
-| **1** | 🎯 **Play 모드 검증 + 점수 도메인 디버깅** | 새 점수판 UI 가 정상 동작하는지 쇼트/풀 양 모드로 확인. 같은 증상 (점수 계산 이상) 이 남아 있으면 `FrameManager` / `ScoreCalculator` 디버깅 |
-| 2 | **`TableLayoutRenderer` (옵션 C)** | 3행 테이블 (Frame / Throws / Score) 레이아웃. 이번 세션 추상 베이스 답습 — 새 컴포넌트 1개 추가 + 인스펙터에서 layout 교체 |
-| 3 | **Display 탭** | `SaveData` 에 screenWidth/Height, fullScreenMode, vSyncCount, targetFrameRate, uiScale 추가 + `SettingsApplier.ApplyDisplay` |
+| **1** | 🎯 **재빌드된 .exe 로 UI 재검증 + 다른 PC 배포 테스트** | `Build/Win64/bowling demo.exe` 실행 후 게임 종료 화면 UI 정상 표시 확인 (단계 3 수정 검증). Display 탭의 해상도/창모드/UI 스케일 변경이 다른 해상도 화면에서 실제로 반영되는지 함께 확인 |
+| 2 | **Play 모드 검증 + 점수 도메인 디버깅** | 새 점수판 UI 가 정상 동작하는지 쇼트/풀 양 모드로 확인. 같은 증상 (점수 계산 이상) 이 남아 있으면 `FrameManager` / `ScoreCalculator` 디버깅 |
+| 3 | **`TableLayoutRenderer` (옵션 C)** | 3행 테이블 (Frame / Throws / Score) 레이아웃. 이번 세션 추상 베이스 답습 — 새 컴포넌트 1개 추가 + 인스펙터에서 layout 교체 |
 | 4 | **Accessibility 탭** | Bumper 모드 + 자동 조준 보조. 볼링 차별 항목 |
 | 5 | **UX 탭** | 카메라 거리 / 기록 초기화 (모달) / 세이브 폴더 열기 |
 | 6 | **튜토리얼 화면** | 형식 미결정 |
 | 7 | **FrameManagerTests 리팩토링** | 예외 기대 케이스 → fail-safe 명세 정렬 |
 | 8 | **UI 폴리싱** | 슬라이더 핸들 / 버튼 / RebindOverlay / FrameCard 디자인 통일 |
+| 9 | **mainmenu 게임종료 버튼 추가 검토** | 현재 mainmenu 에는 쇼트/풀/설정만 — 게임 종료 버튼 없음. UX 일관성 위해 추가 고려 (`Application.Quit()` + Editor 분기 처리) |
 
 ---
 

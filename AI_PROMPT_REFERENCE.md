@@ -360,19 +360,22 @@ static int       CalculateTotalScore(List<Frame> frames);
 - 책임: `SaveData` 의 사용자 설정을 카테고리별 시스템에 일괄 적용하는 **단일 라우터**. 카테고리별 구현은 해당 시스템(AudioManager 등) 에 위임.
 - `Start` 에서 `RefreshFromSave()` 1회 자동 호출.
 - 공개 API: `RefreshFromSave()` — 설정 UI 변경 후 외부에서 호출 가능 (전 시스템 재동기화).
-- 현재 적용 카테고리: 오디오만. 디스플레이 / 접근성 / 입력은 SaveData 필드 추가 후 다음 세션에 `ApplyXxx(save)` 한 줄씩 추가.
+- 현재 적용 카테고리: 오디오 + 입력 + 디스플레이. 접근성은 SaveData 필드 추가 후 추가 예정.
+- **`SceneManager.sceneLoaded` 후크 (2026-06-24 추가)**: 씬 전이 시 새 씬의 `CanvasScaler` 들에 UI 스케일 재적용 (`DisplaySetter.ApplyUIScale`). `Single` 모드 로드만 처리. 활성 씬 단위로 스캔하는 `ApplyUIScale` 의 한계를 보완.
 
 #### `SettingsUI` (MonoBehaviour) — `settings.unity` 의 `SettingsPanel` 에 부착
 - 직렬화 필드 (이름 변경 금지):
   - **탭**: `tabPanels[5]` (GameObject 배열, 인덱스 0=Audio, 1=Display, 2=Controls, 3=Accessibility, 4=UX), `tabButtons[5]` (Button 배열, 같은 인덱스), `defaultTab` (int, 기본 0)
   - **Audio 탭**: `masterSlider`, `sfxSlider`, `bgmSlider` (Slider, 0~1), `muteToggle` (Toggle), `masterValueLabel`, `sfxValueLabel`, `bgmValueLabel` (TMP_Text)
+  - **Display 탭 (2026-06-24)**: `resolutionDropdown`, `windowModeDropdown` (TMP_Dropdown), `uiScaleSlider` (Slider, 0.7~1.5), `uiScaleValueLabel` (TMP_Text)
   - **Controls 탭**: `rebindKeyboardButton`, `rebindGamepadButton`, `resetControlsButton` (Button), `keyboardBindingLabel`, `gamepadBindingLabel`, `connectedDeviceLabel` (TMP_Text), `rebindOverlay` (GameObject, 평소 비활성), `rebindOverlayLabel` (TMP_Text "키를 누르세요" / "버튼을 누르세요")
   - **Footer**: `backToMainMenuButton` (Button), `mainMenuSceneName` (string, 기본 `"mainmenu"`)
 - 값 변경 흐름 (Audio): `Slider.onValueChanged` → 로컬 `_saveCache` 갱신 → `AudioManager.Instance.SetXxxVolume` 즉시 호출 → `SaveSystem.Save(_saveCache)` → 라벨 갱신
+- 값 변경 흐름 (Display): 드롭다운/슬라이더 onValueChanged → `_saveCache` 갱신 → `DisplaySetter.ApplyResolution/ApplyUIScale` 즉시 호출 → `SaveSystem.Save(_saveCache)` → 라벨 갱신 (UI 스케일만)
 - 값 변경 흐름 (Controls): 재설정 버튼 → `InputController.ConfirmAction.PerformInteractiveRebinding(idx).WithControlsExcluding(...).WithCancelingThrough("<Keyboard>/escape").OnComplete(...)` → 완료 시 `SaveBindingOverridesJson` → `_saveCache.inputOverridesJson` 갱신 → Save → 라벨 갱신. 리바인딩 중 confirmAction 은 Disable.
 - 초기화 시 `_initializingUI` 가드로 UI 동기화 중 발화되는 콜백이 불필요 Save 를 호출하지 않게 차단.
 - `OnDestroy` 에서 진행 중 `_activeRebind` 가 있으면 Dispose + confirmAction Enable 복구 (씬 전환 누수 방지).
-- Display / Accessibility / UX 탭은 placeholder TMP ("준비 중") 만 표시. 다음 세션에 채워짐.
+- Accessibility / UX 탭은 placeholder TMP ("준비 중") 만 표시. 다음 세션에 채워짐.
 
 #### `settings.unity` 구조 — `Build Settings index 3`
 ```
@@ -396,7 +399,11 @@ settings.unity
         │   │   ├── Row_Gamepad  (Label "확정 (게임패드)" + ValueFrame "A / Cross" + RebindButton "재설정")
         │   │   ├── Row_Device   (Label "연결된 컨트롤러" + DeviceName)
         │   │   └── Row_Reset    (ResetButton "기본값 복원")
-        │   ├── DisplayPanel / AccessibilityPanel / UXPanel (placeholder)
+        │   ├── DisplayPanel (VerticalLayoutGroup, 2026-06-24 신설)
+        │   │   ├── Row_Resolution  (Label "해상도" + TMP_Dropdown — Screen.resolutions 동적 채움)
+        │   │   ├── Row_WindowMode  (Label "창 모드" + TMP_Dropdown — "전체 화면" / "테두리 없는 창" / "창 모드")
+        │   │   └── Row_UIScale     (Label "UI 크기" + Slider 0.7~1.5 + Value "100%")
+        │   ├── AccessibilityPanel / UXPanel (placeholder)
         ├── RebindOverlay (평소 비활성 — 리바인딩 중 화면 위에 어둡게 덮음, GraphicRaycaster 로 입력 차단)
         └── BackButton ("메인메뉴" — onClick: SceneManager.LoadScene("mainmenu"))
 ```
@@ -410,6 +417,23 @@ settings.unity
 - 새 탭 채우기: `SettingsUI` 의 Audio 탭과 동일 패턴 — SerializeField 추가 → BindXxxTab() → OnXxxChanged() 핸들러 → SaveSystem.Save. 표시 로직 인라인 금지 패턴(§7-12) 답습.
 - 새 카테고리 시스템 적용: `SettingsApplier` 에 `Apply{Category}(save)` 메서드 추가 + `RefreshFromSave` 에 호출 줄 추가.
 - 설정 화면이 다중 진입점(mainmenu 외에 Game 중 ESC 등) 을 가지려면 settings 씬 대신 DontDestroyOnLoad 패널로 전환 필요 — 현재 구조는 mainmenu → settings 전용.
+
+#### `DisplaySetter` (정적 클래스, 2026-06-24 신설)
+- 위치: `Assets/Scripts/Settings/DisplaySetter.cs`. 로그 prefix `[Display]`.
+- 정적 클래스 — AudioManager 와 달리 MonoBehaviour 가 아닌 이유: `Screen` API 자체가 static + CanvasScaler 는 호출 시점의 활성 씬 전체 스캔으로 충분. 씬 전이 후 재적용은 `SettingsApplier.OnSceneLoaded` 가 담당.
+- 공개 API:
+  - `IReadOnlyList<Resolution> GetSupportedResolutions()` — `Screen.resolutions` 중 width×height 중복 제거 + 최고 refresh rate 보존, 오름차순. 1회 캐싱.
+  - `void ApplyResolution(int width, int height, FullScreenMode mode)` — `Screen.SetResolution` 래핑. 0 이하 입력 시 LogWarning 후 무시.
+  - `void ApplyUIScale(float scale)` — 0.5~2.0 클램프. 활성 씬의 모든 `CanvasScaler` (mode=ScaleWithScreenSize) 의 `referenceResolution` 을 `(1920/scale, 1080/scale)` 으로 갱신. 다른 모드는 건드리지 않음.
+  - `FullScreenMode IndexToMode(int idx)` / `int ModeToIndex(FullScreenMode)` — 드롭다운 idx ↔ FullScreenMode 매핑 (0=ExclusiveFullScreen, 1=FullScreenWindow, 2=Windowed). mac 전용 `MaximizedWindow` 는 1 로 폴백.
+- **UI 스케일 원리**: CanvasScaler 의 `m_UiScaleMode=ScaleWithScreenSize` (모든 씬 통일, §11-5) 에서는 referenceResolution 이 작을수록 각 픽셀이 더 큰 화면 비율로 매핑된다. scale=1.5 → ref 1280×720 → UI 가 1.5배 크게 보임. scale=0.7 → ref ≈2742×1543 → 작게 보임. 기준 해상도(1920×1080) 자체를 바꾸는 게 아니라 본래 좌표는 유지하며 캔버스 매핑만 변화.
+- **Editor 한계**: `Screen.SetResolution` 은 Editor 의 Game View 에 영향 없음 — Standalone 빌드에서만 실효. 따라서 해상도/창모드 변경의 시각 검증은 빌드 후에만 가능.
+
+#### `SaveData` 디스플레이 필드 (2026-06-24 추가)
+- `int screenWidth = 1920`, `int screenHeight = 1080` — 0 이하면 "미설정" 으로 간주.
+- `int fullScreenMode = 1` — `UnityEngine.FullScreenMode` 의 int 캐스팅. 1 = `FullScreenWindow` (배포 권장 기본값).
+- `float uiScale = 1.0f` — 0 은 의미상 불가능한 sentinel (§7-26 참조). 0.5~2.0 외 입력은 `ApplyUIScale` 가 클램프.
+- **마이그레이션**: `SaveSystem.NormalizeDisplay` 가 `uiScale==0` (구 save.json 에 디스플레이 필드 없음) 감지 시 디스플레이 4필드를 모두 기본값으로 일괄 복원. 음량 마이그레이션과 같은 sentinel-기반 패턴.
 
 ### 3-10. 타이틀 / 대기 화면 (2026-06-23 신설, Cinemachine 기반)
 
@@ -591,6 +615,10 @@ pinManager.ResetAllPins()
 23. **`ScoreboardUI` 의 `layout` 필드를 `ScoreboardLayoutRenderer` 추상 타입으로 유지** — CardLayoutRenderer 직접 타입 캐스팅 금지. 추후 TableLayoutRenderer 추가 시 인스펙터 교체만으로 전환 가능해야 함.
 24. **`FrameCardUI.STRIKE_FIRST/SEC` / `SPARE_SEC` / `EMPTY` 상수 값** — 도메인(Frame/FrameManager/ScoreCalculator) 에 표시 문자열 도입 금지 패턴의 단일 출처. 변경 시 카드 표시 일관성 깨짐.
 25. **각 Cinemachine vcam 의 `CinemachineRotationComposer` (또는 다른 Aim) 컴포넌트** — 제거 시 LookAt 슬롯이 무시되고 vcam Transform 회전이 그대로 사용되어 카메라가 엉뚱한 방향을 응시한다. Cinemachine 3.x 의 기본 동작 — Body / Aim 컴포넌트가 없으면 LookAt / Follow 자동 처리 안 됨.
+26. **`SaveData.uiScale==0` 의 sentinel 의미** — "디스플레이 필드 미마이그레이션" 표시. `SaveSystem.NormalizeDisplay` 가 이를 감지해 디스플레이 4필드(screenWidth/screenHeight/fullScreenMode/uiScale) 를 모두 기본값으로 복원한다. 의도적 0 입력은 불가능 (UI 가 보이지 않게 되므로 의미 없음). 새 디스플레이 필드 추가 시 NormalizeDisplay 의 "기본값 일괄 복원" 패턴에 포함시킬 것 — 부분 마이그레이션 분기 만들지 말 것.
+27. **`SettingsUI` 의 Display 탭 SerializeField 이름** (`resolutionDropdown`, `windowModeDropdown`, `uiScaleSlider`, `uiScaleValueLabel`) — 변경 시 `settings.unity` 의 Row_Resolution / Row_WindowMode / Row_UIScale 와이어링이 끊김.
+28. **`SettingsApplier.OnSceneLoaded` 의 sceneLoaded 후크** — 씬 전이마다 UI 스케일을 새 씬의 CanvasScaler 에 재적용. 제거 시 Game 씬 진입 후 점수판 캔버스가 기준 1920×1080 으로 돌아가 사용자 설정이 휘발됨. `LoadSceneMode.Single` 분기 유지 (additive 로드 제외).
+29. **모든 씬 Canvas 의 CanvasScaler 통일 규칙** (§11-5) — `ScaleWithScreenSize 1920×1080 match=0.5`. 새 씬 추가 시 또는 기존 Canvas 수정 시 이 4개 값을 어기지 말 것. `ConstantPixelSize` 모드는 빌드 시 해상도마다 UI 가 다르게 보이고 `DisplaySetter.ApplyUIScale` 가 무시한다. 2026-06-24 Gameover_scene 의 ConstantPixelSize 800×600 으로 인한 UI 겹침 사례가 단일 출처 위반의 대표 사례.
 
 ---
 
@@ -696,16 +724,28 @@ FrameCard (RectTransform 140×180, FrameCardUI + LayoutElement preferredWidth=14
 - `EventSystem` — EventSystem + InputSystemUIInputModule
 - `Canvas` — Canvas (ScreenSpaceOverlay) + CanvasScaler (ScaleWithScreenSize, 1920×1080) + GraphicRaycaster + **MainMenuUI**. 자식: Title / ShortButton / FullButton / **SettingsButton** (y=-300)
 
-### 11-4. mainmenu.unity Canvas 자식 (3개)
+### 11-4. mainmenu.unity Canvas 자식 (4개, 2026-06-24 갱신)
 ```
-Canvas
-├── Title          (TMP_Text "Bowling Champion", 상단 중앙)
-├── ShortButton    (Image + Button + Label TMP "쇼트 모드 (5프레임)")   ← MainMenuUI.shortButton
-└── FullButton     (Image + Button + Label TMP "풀 모드 (10프레임)")    ← MainMenuUI.fullButton
+Canvas (ScaleWithScreenSize 1920×1080)
+├── Title          (TMP_Text "Bowling Champion" 96pt, 상단 중앙 anchor=(0.5,1) pos=(0,-150))
+├── ShortButton    (Image + Button + Label TMP "쇼트 모드 (5프레임)" 56pt)  ← MainMenuUI.shortButton (y=+60)
+├── FullButton     (Image + Button + Label TMP "풀 모드 (10프레임)" 56pt)   ← MainMenuUI.fullButton  (y=-120)
+└── SettingsButton (Image + Button + Label TMP "설정" 56pt)                ← MainMenuUI.settingsButton (y=-300)
 ```
 
-### 11-5. CanvasScaler 설정 (2026-06-05 갱신)
-씬의 모든 Canvas (Game.unity 의 점수판 Canvas / HUD_Canvas, mainmenu.unity 의 Canvas) 가 동일 설정으로 통일 — 해상도 독립성 보장.
+### 11-7. Gameover_scene.unity Canvas 자식 (5개, 2026-06-24 재배치)
+```
+Canvas (ScaleWithScreenSize 1920×1080) — GameOverUI 부착
+├── new_record       (TMP "신기록!" 90pt 노랑, anchor=center y=+370)  ← GameOverUI.newRecordText (조건부 활성)
+├── gameover_score   (TMP 점수 숫자 220pt 흰, anchor=center y=+100)   ← GameOverUI.gameOverScoreText
+├── best_score       (TMP "최고 점수: N" 56pt, anchor=center y=-140)  ← GameOverUI.bestScoreText
+├── Mainmenu_button  (Button "메인메뉴" 36pt, anchor=center y=-300)   ← GameOverUI.mainMenuButton
+└── Quit_button      (Button "게임종료" 36pt, anchor=center y=-410)   ← GameOverUI.quitButton
+```
+모든 요소 anchor=center pivot=center. y 간격은 화면 1080 기준이며 ScaleWithScreenSize 라 다른 해상도에서도 비례 유지.
+
+### 11-5. CanvasScaler 설정 (2026-06-24 재확인 — 모든 씬 통일)
+씬의 모든 Canvas 가 동일 설정으로 통일 — 해상도 독립성 + Display 탭 UI 스케일 (`DisplaySetter.ApplyUIScale`) 의 단일 대상.
 | 필드 | 값 |
 |---|---|
 | `m_UiScaleMode` | 1 (ScaleWithScreenSize) |
@@ -713,7 +753,9 @@ Canvas
 | `m_ScreenMatchMode` | 0 (MatchWidthOrHeight) |
 | `m_MatchWidthOrHeight` | 0.5 (Width/Height 균형) |
 
-> 새 Canvas 추가 시 위 설정을 답습할 것. 특히 `ConstantPixelSize` (m_UiScaleMode=0) 는 해상도마다 상대 크기·위치가 변동하므로 금지.
+**적용 씬** (2026-06-24 기준): mainmenu / Game (Canvas + HUD_Canvas) / Gameover_scene / settings / title.
+
+> 새 Canvas 추가 시 위 설정을 답습할 것. 특히 `ConstantPixelSize` (m_UiScaleMode=0) 는 해상도마다 상대 크기·위치가 변동하므로 금지. 2026-06-24 에 Gameover_scene 이 ConstantPixelSize 800×600 으로 잘못 설정되어 1920×1080 빌드에서 UI 가 화면 일부에만 압축 표시 + 좌표 가까운 요소들이 모두 겹친 사례 발생 (`SESSION_2026-06-24` 단계 3). `DisplaySetter.ApplyUIScale` 도 ScaleWithScreenSize 모드의 CanvasScaler 만 갱신하므로 다른 모드는 UI 스케일 설정이 무시된다.
 
 ### 11-6. 폰트
 - Game.unity 의 점수판 4개 TMP: `NotoSansKR-Black SDF` (Bold 페이스 미내장, weight 900). `<b>` 시각 효과 없음 — 강조 필요 시 `<color>` / `<size>` 사용 권장.
@@ -766,4 +808,6 @@ Play (mainmenu, build index 0) → 버튼 클릭 시 다음 로그 순서가 보
 
 *이 문서는 코드 변경과 함께 갱신되어야 함. 시그니처·이벤트·필드명이 본 문서와 코드 사이에서 어긋나는 경우, **코드를 기준으로 본 문서를 수정**한다.*
 
-*최종 갱신: 2026-06-23 (타이틀 화면 vcam 좌표 미세 조정 — PinVCam Position 최종 `(0.5, 1.8, 5)`, LaneVCam `(-3, 2.2, 0)`, LaneTarget `(2, 0.3, 8)`. 각 vcam 에 `CinemachineRotationComposer` Aim 컴포넌트 추가 — Cinemachine 3.x 에서 LookAt 동작에 필수. §7-25 절대 건드리지 말 것 항목 추가)*
+*최종 갱신: 2026-06-24 종합 (Display 탭 완성 + 첫 Windows64 빌드 + Gameover_scene UI 재배치). 단계 1: `DisplaySetter` 신설, `SaveData` 디스플레이 4필드 + 마이그레이션, `SettingsApplier` sceneLoaded 후크, Display 탭 3개 row. 단계 2: `manage_build` 로 `Build/Win64/bowling demo.exe` 생성 (185 MB, dev). 단계 3: Gameover_scene CanvasScaler `ConstantPixelSize 800×600` → `ScaleWithScreenSize 1920×1080` 통일 + 5요소 재배치 (new_record/gameover_score/best_score/Mainmenu_button/Quit_button) + mainmenu Title 가운데 정렬. §3-9 / §11-3,4,5,7 / §7-26~29 갱신.*
+
+*직전 갱신: 2026-06-23 (타이틀 화면 vcam 좌표 미세 조정 — PinVCam Position 최종 `(0.5, 1.8, 5)`, LaneVCam `(-3, 2.2, 0)`, LaneTarget `(2, 0.3, 8)`. 각 vcam 에 `CinemachineRotationComposer` Aim 컴포넌트 추가 — Cinemachine 3.x 에서 LookAt 동작에 필수. §7-25 절대 건드리지 말 것 항목 추가)*

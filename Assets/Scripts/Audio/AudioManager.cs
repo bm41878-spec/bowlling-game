@@ -46,11 +46,17 @@ namespace BowlingGame
         [Tooltip("굴림 같은 지속 SFX 전용 AudioSource. loop=true 권장. outputAudioMixerGroup = sfxGroup.")]
         [SerializeField] private AudioSource rollSource;
 
+        [Tooltip("조준 비프음 전용 AudioSource. panStereo 가 매 호출마다 바뀌므로 sfxSource 와 분리 (다른 SFX 패닝 오염 방지). outputAudioMixerGroup = sfxGroup.")]
+        [SerializeField] private AudioSource aimBeepSource;
+
         [Header("Clips (null 허용 — 미배선 시 LogWarning 후 무시)")]
         [SerializeField] private AudioClip pinHitClip;
         [SerializeField] private AudioClip strikeClip;
         [SerializeField] private AudioClip gutterClip;
         [SerializeField] private AudioClip ballRollClip;
+
+        [Tooltip("조준 위치가 레인 좌/우 끝단에 도달했을 때 1회 재생되는 짧은 비프 ('삐'). 시각장애 접근성 — SaveData.aimingAudioGuide 가 ON 일 때만 BallAimer 가 호출.")]
+        [SerializeField] private AudioClip aimEdgeBeepClip;
 
         // 현재 씬에서 구독 중인 참조 — 씬 전이 시 Unwire 에 사용.
         private BowlingBall subscribedBall;
@@ -205,6 +211,26 @@ namespace BowlingGame
         public void PlayPinHit() => PlayOneShotSafe(pinHitClip, "pinHit");
         public void PlayStrike() => PlayOneShotSafe(strikeClip, "strike");
         public void PlayGutter() => PlayOneShotSafe(gutterClip, "gutter");
+
+        /// <summary>
+        /// 조준 끝단 비프 — pan 은 -1(완전 좌) ~ +1(완전 우). 전용 source 를 통해 패닝하므로
+        /// 다른 SFX 의 stereo balance 에 영향이 없다. 클립/source 미배선 시 LogWarning 후 무시.
+        /// </summary>
+        public void PlayAimEdgeBeep(float pan)
+        {
+            if (aimEdgeBeepClip == null)
+            {
+                Debug.LogWarning($"{LogPrefix} aimEdgeBeepClip 미배선 — 비프 무시");
+                return;
+            }
+            if (aimBeepSource == null)
+            {
+                Debug.LogWarning($"{LogPrefix} aimBeepSource 미배선 — 비프 무시");
+                return;
+            }
+            aimBeepSource.panStereo = Mathf.Clamp(pan, -1f, 1f);
+            aimBeepSource.PlayOneShot(aimEdgeBeepClip);
+        }
 
         // 굴림 사운드 — PlayOneShot 이 아닌 별도 source 의 Play/Stop 패턴 (loop=true 전제).
         public void StartBallRoll()

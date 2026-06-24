@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -39,6 +40,12 @@ namespace BowlingGame
         [SerializeField] private TMP_Text sfxValueLabel;
         [SerializeField] private TMP_Text bgmValueLabel;
 
+        [Header("Display 탭")]
+        [SerializeField] private TMP_Dropdown resolutionDropdown;
+        [SerializeField] private TMP_Dropdown windowModeDropdown;
+        [SerializeField] private Slider uiScaleSlider;
+        [SerializeField] private TMP_Text uiScaleValueLabel;
+
         [Header("Controls 탭")]
         [SerializeField] private Button rebindKeyboardButton;
         [SerializeField] private Button rebindGamepadButton;
@@ -48,6 +55,10 @@ namespace BowlingGame
         [SerializeField] private TMP_Text connectedDeviceLabel;
         [SerializeField] private GameObject rebindOverlay;
         [SerializeField] private TMP_Text rebindOverlayLabel;
+
+        [Header("Accessibility 탭")]
+        [SerializeField] private Toggle audioGuideToggle;
+        [SerializeField] private TMP_Dropdown colorblindDropdown;
 
         [Header("Footer")]
         [SerializeField] private Button backToMainMenuButton;
@@ -63,13 +74,18 @@ namespace BowlingGame
         // 진행 중인 리바인딩 작업 — Cancel 또는 컴포넌트 파괴 시 Dispose.
         private InputActionRebindingExtensions.RebindingOperation _activeRebind;
 
+        // Display 탭 — 드롭다운 인덱스 → 해상도 매핑.
+        private List<Resolution> _supportedResolutions;
+
         void Start()
         {
             _saveCache = SaveSystem.Load();
 
             _initializingUI = true;
             BindAudioTab();
+            BindDisplayTab();
             BindControlsTab();
+            BindAccessibilityTab();
             _initializingUI = false;
 
             BindTabs();
@@ -118,6 +134,55 @@ namespace BowlingGame
                 backToMainMenuButton.onClick.AddListener(OnBackToMainMenu);
         }
 
+        private void BindDisplayTab()
+        {
+            // 해상도 드롭다운 — 시스템 지원 해상도 채우기 + 현재 값 선택
+            if (resolutionDropdown != null)
+            {
+                _supportedResolutions = new List<Resolution>(DisplaySetter.GetSupportedResolutions());
+                resolutionDropdown.ClearOptions();
+                var labels = new List<string>(_supportedResolutions.Count);
+                foreach (var r in _supportedResolutions)
+                    labels.Add($"{r.width} × {r.height}");
+                resolutionDropdown.AddOptions(labels);
+
+                int idx = FindResolutionIndex(_saveCache.screenWidth, _saveCache.screenHeight);
+                if (idx < 0) idx = FindResolutionIndex(Screen.currentResolution.width, Screen.currentResolution.height);
+                if (idx < 0) idx = _supportedResolutions.Count - 1;
+                resolutionDropdown.SetValueWithoutNotify(idx);
+                resolutionDropdown.RefreshShownValue();
+                resolutionDropdown.onValueChanged.AddListener(OnResolutionChanged);
+            }
+
+            // 창 모드 드롭다운 — 3개 옵션 고정
+            if (windowModeDropdown != null)
+            {
+                windowModeDropdown.ClearOptions();
+                windowModeDropdown.AddOptions(new List<string> { "전체 화면", "테두리 없는 창", "창 모드" });
+                windowModeDropdown.SetValueWithoutNotify(DisplaySetter.ModeToIndex((FullScreenMode)_saveCache.fullScreenMode));
+                windowModeDropdown.RefreshShownValue();
+                windowModeDropdown.onValueChanged.AddListener(OnWindowModeChanged);
+            }
+
+            // UI 스케일 슬라이더
+            if (uiScaleSlider != null)
+            {
+                uiScaleSlider.minValue = 0.7f;
+                uiScaleSlider.maxValue = 1.5f;
+                uiScaleSlider.value = _saveCache.uiScale;
+                uiScaleSlider.onValueChanged.AddListener(OnUIScaleChanged);
+            }
+            RefreshDisplayLabels();
+        }
+
+        private int FindResolutionIndex(int w, int h)
+        {
+            if (_supportedResolutions == null) return -1;
+            for (int i = 0; i < _supportedResolutions.Count; i++)
+                if (_supportedResolutions[i].width == w && _supportedResolutions[i].height == h) return i;
+            return -1;
+        }
+
         private void BindControlsTab()
         {
             if (rebindKeyboardButton != null) rebindKeyboardButton.onClick.AddListener(OnRebindKeyboardClicked);
@@ -125,6 +190,26 @@ namespace BowlingGame
             if (resetControlsButton  != null) resetControlsButton.onClick.AddListener(OnResetControlsClicked);
             if (rebindOverlay != null) rebindOverlay.SetActive(false);
             RefreshControlsLabels();
+        }
+
+        private void BindAccessibilityTab()
+        {
+            if (audioGuideToggle != null)
+            {
+                audioGuideToggle.isOn = _saveCache.aimingAudioGuide;
+                audioGuideToggle.onValueChanged.AddListener(OnAudioGuideChanged);
+            }
+
+            if (colorblindDropdown != null)
+            {
+                colorblindDropdown.ClearOptions();
+                // 인덱스 = SaveData.colorblindMode (0=Off, 1=적색맹, 2=녹색맹, 3=청색맹).
+                colorblindDropdown.AddOptions(new List<string> { "끔", "적색맹 (Protanopia)", "녹색맹 (Deuteranopia)", "청색맹 (Tritanopia)" });
+                int idx = Mathf.Clamp(_saveCache.colorblindMode, 0, 3);
+                colorblindDropdown.SetValueWithoutNotify(idx);
+                colorblindDropdown.RefreshShownValue();
+                colorblindDropdown.onValueChanged.AddListener(OnColorblindChanged);
+            }
         }
 
         // ---------- 탭 전환 ----------
@@ -172,6 +257,61 @@ namespace BowlingGame
             _saveCache.isMuted = muted;
             AudioManager.Instance?.SetMuted(muted);
             SaveSystem.Save(_saveCache);
+        }
+
+        // ---------- Display 핸들러 ----------
+
+        private void OnResolutionChanged(int idx)
+        {
+            if (_initializingUI || _supportedResolutions == null) return;
+            if (idx < 0 || idx >= _supportedResolutions.Count) return;
+            var r = _supportedResolutions[idx];
+            _saveCache.screenWidth = r.width;
+            _saveCache.screenHeight = r.height;
+            DisplaySetter.ApplyResolution(r.width, r.height, (FullScreenMode)_saveCache.fullScreenMode);
+            SaveSystem.Save(_saveCache);
+        }
+
+        private void OnWindowModeChanged(int idx)
+        {
+            if (_initializingUI) return;
+            var mode = DisplaySetter.IndexToMode(idx);
+            _saveCache.fullScreenMode = (int)mode;
+            DisplaySetter.ApplyResolution(_saveCache.screenWidth, _saveCache.screenHeight, mode);
+            SaveSystem.Save(_saveCache);
+        }
+
+        private void OnUIScaleChanged(float v)
+        {
+            if (_initializingUI) return;
+            _saveCache.uiScale = v;
+            DisplaySetter.ApplyUIScale(v);
+            SaveSystem.Save(_saveCache);
+            RefreshDisplayLabels();
+        }
+
+        private void RefreshDisplayLabels()
+        {
+            if (uiScaleValueLabel != null) uiScaleValueLabel.text = Mathf.RoundToInt(_saveCache.uiScale * 100) + "%";
+        }
+
+        // ---------- Accessibility 핸들러 ----------
+
+        private void OnAudioGuideChanged(bool on)
+        {
+            if (_initializingUI) return;
+            _saveCache.aimingAudioGuide = on;
+            SaveSystem.Save(_saveCache);
+            Debug.Log($"{LogPrefix} 조준 음향 가이드 {(on ? "ON" : "OFF")}");
+        }
+
+        private void OnColorblindChanged(int idx)
+        {
+            if (_initializingUI) return;
+            _saveCache.colorblindMode = Mathf.Clamp(idx, 0, 3);
+            SaveSystem.Save(_saveCache);
+            // 실제 셰이더/머티리얼 보정은 추후 업데이트 — 현재는 선택값 저장만.
+            Debug.Log($"{LogPrefix} 색맹 모드 = {_saveCache.colorblindMode} (실제 적용은 추후 업데이트)");
         }
 
         // ---------- 헬퍼 ----------

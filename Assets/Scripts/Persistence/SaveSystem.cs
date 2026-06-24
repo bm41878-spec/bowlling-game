@@ -51,6 +51,9 @@ namespace BowlingGame
                 // 음량 필드 마이그레이션 — 구 save.json (필드 없음) 에서는 0f 로 로드되므로 기본값으로 보정.
                 NormalizeVolumes(data);
 
+                // 디스플레이 필드 마이그레이션 — uiScale==0 (sentinel, 의미상 불가능 값) 감지 시 디스플레이 4필드 일괄 기본값으로 복원.
+                NormalizeDisplay(data);
+
                 Debug.Log($"{LogPrefix} 로드 완료 — 기록 {data.highScores.Count}건 (version {data.version})");
                 return data;
             }
@@ -96,6 +99,19 @@ namespace BowlingGame
             if (data.masterVolume == 0f) data.masterVolume = defaults.masterVolume;
             if (data.sfxVolume    == 0f) data.sfxVolume    = defaults.sfxVolume;
             if (data.bgmVolume    == 0f) data.bgmVolume    = defaults.bgmVolume;
+        }
+
+        // 디스플레이 필드 마이그레이션 — uiScale 은 0 이 의미상 불가능하므로 sentinel 로 활용.
+        // 구 save.json (디스플레이 필드 없음) 에서는 JsonUtility 가 모든 필드를 0 으로 두므로 uiScale==0 감지 시
+        // 디스플레이 4필드를 모두 기본값으로 복원한다 (개별 필드 0 분기 대신 일괄 처리 — 부분 수정 상태가 없는 영역이라 안전).
+        private static void NormalizeDisplay(SaveData data)
+        {
+            if (data.uiScale > 0f) return;
+            var defaults = new SaveData();
+            data.uiScale = defaults.uiScale;
+            data.screenWidth = defaults.screenWidth;
+            data.screenHeight = defaults.screenHeight;
+            data.fullScreenMode = defaults.fullScreenMode;
         }
     }
 }
