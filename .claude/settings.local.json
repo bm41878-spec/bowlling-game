@@ -57,7 +57,9 @@
       "Bash(grep -E \"^\\(@@|[+-].*Lane|[+-].*Mat_Lane|[+-].*m_Name:.*$|[+-].*MeshRenderer\\)\")",
       "Bash(awk '/^ m_Name: Lane/{name=$2$3} /m_LocalPosition:/{pos=$0; getline; printf \" %s\\\\n pos: %s\\\\n\", name, pos}' Assets/Scenes/Game.unity)",
       "PowerShell(Write-Output \"=== Assets/Models contents ===\"; Get-ChildItem \"Assets\\\\Models\" -Recurse -File | ForEach-Object { '{0,-50} {1,8} bytes  {2:MM-dd HH:mm}' -f $_.FullName.Replace\\($PWD.Path + '\\\\', ''\\), $_.Length, $_.LastWriteTime })",
-      "mcp__UnityMCP__manage_packages"
+      "mcp__UnityMCP__manage_packages",
+      "Bash(git *)",
+      "Bash(awk 'NR==104 || NR==103 || NR==105' \"C:/Users/bmbm7/bowling demo/bowlling-game/.gitignore\")"
     ]
   }
 }
