@@ -21,8 +21,43 @@ namespace BowlingGame
         private const string FileName = "save.json";
         private const string LogPrefix = "[SaveSystem]";
 
-        /// <summary>세이브 파일 전체 경로.</summary>
+        // WebGL 빌드에서는 File.IO 대신 PlayerPrefs(IndexedDB 자동 sync) 를 사용한다.
+        private const string PlayerPrefsKey = "BowlingGame.SaveData";
+
+        /// <summary>세이브 파일 전체 경로 (데스크톱/모바일 기준). WebGL 빌드에서는 의미 없음.</summary>
         public static string FilePath => Path.Combine(Application.persistentDataPath, FileName);
+
+        // 로그/디버그용 storage 위치 표시 (플랫폼별).
+        private static string StorageLocation =>
+#if UNITY_WEBGL && !UNITY_EDITOR
+            $"PlayerPrefs[{PlayerPrefsKey}]";
+#else
+            FilePath;
+#endif
+
+        private static bool StorageExists() =>
+#if UNITY_WEBGL && !UNITY_EDITOR
+            PlayerPrefs.HasKey(PlayerPrefsKey);
+#else
+            File.Exists(FilePath);
+#endif
+
+        private static string ReadAllText() =>
+#if UNITY_WEBGL && !UNITY_EDITOR
+            PlayerPrefs.GetString(PlayerPrefsKey);
+#else
+            File.ReadAllText(FilePath);
+#endif
+
+        private static void WriteAllText(string json)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            PlayerPrefs.SetString(PlayerPrefsKey, json);
+            PlayerPrefs.Save();
+#else
+            File.WriteAllText(FilePath, json);
+#endif
+        }
 
         /// <summary>
         /// 세이브 데이터를 로드한다. 파일이 없거나 파싱에 실패하면 빈 <see cref="SaveData"/> 를 반환한다 (예외 전파 안 함).
@@ -31,13 +66,13 @@ namespace BowlingGame
         {
             try
             {
-                if (!File.Exists(FilePath))
+                if (!StorageExists())
                 {
-                    Debug.Log($"{LogPrefix} 세이브 파일 없음 — 빈 데이터로 시작 ({FilePath})");
+                    Debug.Log($"{LogPrefix} 세이브 없음 — 빈 데이터로 시작 ({StorageLocation})");
                     return NewEmpty();
                 }
 
-                string json = File.ReadAllText(FilePath);
+                string json = ReadAllText();
                 var data = JsonUtility.FromJson<SaveData>(json);
                 if (data == null)
                 {
@@ -78,8 +113,8 @@ namespace BowlingGame
             try
             {
                 string json = JsonUtility.ToJson(data, prettyPrint: true);
-                File.WriteAllText(FilePath, json);
-                Debug.Log($"{LogPrefix} 저장 완료 — 기록 {data.highScores?.Count ?? 0}건 → {FilePath}");
+                WriteAllText(json);
+                Debug.Log($"{LogPrefix} 저장 완료 — 기록 {data.highScores?.Count ?? 0}건 → {StorageLocation}");
             }
             catch (Exception e)
             {

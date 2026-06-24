@@ -165,6 +165,11 @@ namespace BowlingGame
 
         private void BindDisplayTab()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // 브라우저가 viewport 를 관리하므로 해상도/창모드 컨트롤은 비활성. UI 스케일은 그대로 유효.
+            if (resolutionDropdown != null) resolutionDropdown.interactable = false;
+            if (windowModeDropdown != null) windowModeDropdown.interactable = false;
+#else
             // 해상도 드롭다운 — 시스템 지원 해상도 채우기 + 현재 값 선택
             if (resolutionDropdown != null)
             {
@@ -192,8 +197,9 @@ namespace BowlingGame
                 windowModeDropdown.RefreshShownValue();
                 windowModeDropdown.onValueChanged.AddListener(OnWindowModeChanged);
             }
+#endif
 
-            // UI 스케일 슬라이더
+            // UI 스케일 슬라이더 (WebGL 포함 전 플랫폼 활성)
             if (uiScaleSlider != null)
             {
                 uiScaleSlider.minValue = 0.7f;

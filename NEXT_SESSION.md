@@ -1,6 +1,60 @@
 # 다음 세션 재개 가이드
 
-> **작성일**: 2026-06-24 (Display 탭 완성 + Windows64 첫 빌드 + Gameover UI 재배치)
+> **작성일**: 2026-06-25 (WebGL Development Build 첫 산출 + 로컬 검증)
+
+---
+
+## 00000. 2026-06-25 세션 — WebGL Development Build
+
+### 단계 1 — `UNITY_WEBGL` 분기 코드 4건
+
+데스크톱 전용 API 들이 WebGL 런타임에서 실패하거나 의미가 없으므로 컴파일 분기로 안전 처리.
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Persistence/SaveSystem.cs` | `#if UNITY_WEBGL && !UNITY_EDITOR` 분기로 `File.IO` 대신 `PlayerPrefs.SetString("BowlingGame.SaveData", json)` 사용. WebGL 런타임은 PlayerPrefs 를 브라우저 `localStorage` 에 자동 sync. `StorageExists/ReadAllText/WriteAllText/StorageLocation` 내부 헬퍼로 호출부는 그대로 유지. 로그도 `→ {StorageLocation}` 으로 일반화 |
+| `Assets/Scripts/Settings/DisplaySetter.cs` | `ApplyResolution` 의 `Screen.SetResolution` 호출을 WebGL 에서 스킵 + `Debug.Log` 로 안내. 브라우저가 viewport 를 관리하며 ExclusiveFullScreen 은 보안 정책상 직접 호출 불가 |
+| `Assets/Scripts/UI/GameOverUI.cs` | `Refresh()` 끝부분에서 WebGL 시 `quitButton.gameObject.SetActive(false)` (브라우저는 페이지를 게임 코드가 닫을 수 없음). `OnQuitClicked` 에도 WebGL 분기 추가 (`Application.Quit()` 무력화 + 경고 로그 — 버튼이 숨겨져 있어야 정상) |
+| `Assets/Scripts/UI/SettingsUI.cs` | `BindDisplayTab` 에서 WebGL 시 `resolutionDropdown.interactable = false`, `windowModeDropdown.interactable = false` (UI 스케일 슬라이더는 그대로 동작 — Canvas 만 건드리는 거라 브라우저 무관) |
+
+### 단계 2 — WebGL Module 설치 (사용자 직접)
+
+- Unity Hub → Installs → 6000.4.7f1 → Add Modules → WebGL Build Support 추가
+- 사용자가 본 세션 초반에 설치 완료 보고
+
+### 단계 3 — 플랫폼 스위치 + 첫 WebGL 빌드
+
+| 항목 | 결과 |
+|---|---|
+| `manage_build action=platform target=webgl` | activeBuildTarget = WebGL, 도메인 리로드 60~80초 후 컴파일 종료 (분기 코드 4건 모두 통과, 콘솔 에러 0) |
+| `manage_build action=build target=webgl output_path=Build/WebGL development=true` | 비동기 job. 약 **598초 (10분)** 소요 (IL2CPP 트랜스파일 + WebAssembly 빌드 + 셰이더 컴파일). errors=0 warnings=10 (URP 셰이더 스트리핑 정보성) |
+| 산출물 | `Build/WebGL/` 총 **128.5 MB** |
+
+**빌드 구조**:
+```
+Build/WebGL/
+├── index.html                         (7.9 KB — 진입점 + Unity 부트스트랩 호출)
+├── Build/
+│   ├── WebGL.wasm                     (109.9 MB — IL2CPP + 엔진 + 게임 코드, 비압축)
+│   ├── WebGL.data                     (17.8 MB — 씬·텍스처·사운드)
+│   ├── WebGL.framework.js             (0.8 MB — Unity bootstrap)
+│   └── WebGL.loader.js                (60 KB — 초기 로더)
+└── TemplateData/                      (<1 MB — 로딩 UI 자산, favicon, progress bar)
+```
+
+⚠️ **Development Build 라 압축 OFF** — Release 빌드(`development=false`) 시 Brotli/Gzip 적용으로 `.wasm` ~30 MB, `.data` ~5 MB 로 축소 (총 ~35~40 MB 예상).
+
+### 단계 4 — 로컬 서버 검증
+
+- `cd Build/WebGL && python -m http.server 8080` (PID 17344, Python 3.14.5)
+- `http://localhost:8080/` 자동 오픈하여 사용자 검증 진행
+- 검증 후 사용자 지시로 서버 종료 (자식 python 프로세스까지 정리)
+
+**WebGL 분기 코드 검증 포인트 (사용자 확인용)**:
+1. F12 콘솔 → `[SaveSystem] 저장 완료 — ... → PlayerPrefs[BowlingGame.SaveData]`
+2. 게임 종료 화면 → "게임 종료" 버튼 숨김 (메인메뉴 버튼만 표시)
+3. 설정 → Display 탭 → 해상도/창모드 드롭다운 회색 비활성, UI 스케일 슬라이더만 작동
+4. F12 → Application → Local Storage `localhost:8080` → `BowlingGame.SaveData` 키 (JSON)
 
 ---
 
@@ -125,15 +179,16 @@ Build/Win64/
 
 | # | 항목 | 비고 |
 |---|---|---|
-| **1** | 🎯 **재빌드된 .exe 로 UI 재검증 + 다른 PC 배포 테스트** | `Build/Win64/bowling demo.exe` 실행 후 게임 종료 화면 UI 정상 표시 확인 (단계 3 수정 검증). Display 탭의 해상도/창모드/UI 스케일 변경이 다른 해상도 화면에서 실제로 반영되는지 함께 확인 |
-| 2 | **Play 모드 검증 + 점수 도메인 디버깅** | 새 점수판 UI 가 정상 동작하는지 쇼트/풀 양 모드로 확인. 같은 증상 (점수 계산 이상) 이 남아 있으면 `FrameManager` / `ScoreCalculator` 디버깅 |
-| 3 | **`TableLayoutRenderer` (옵션 C)** | 3행 테이블 (Frame / Throws / Score) 레이아웃. 이번 세션 추상 베이스 답습 — 새 컴포넌트 1개 추가 + 인스펙터에서 layout 교체 |
-| 4 | **Accessibility 탭** | Bumper 모드 + 자동 조준 보조. 볼링 차별 항목 |
-| 5 | **UX 탭** | 카메라 거리 / 기록 초기화 (모달) / 세이브 폴더 열기 |
-| 6 | **튜토리얼 화면** | 형식 미결정 |
-| 7 | **FrameManagerTests 리팩토링** | 예외 기대 케이스 → fail-safe 명세 정렬 |
-| 8 | **UI 폴리싱** | 슬라이더 핸들 / 버튼 / RebindOverlay / FrameCard 디자인 통일 |
-| 9 | **mainmenu 게임종료 버튼 추가 검토** | 현재 mainmenu 에는 쇼트/풀/설정만 — 게임 종료 버튼 없음. UX 일관성 위해 추가 고려 (`Application.Quit()` + Editor 분기 처리) |
+| **1** | 🎯 **WebGL Release 빌드 + 배포** | `manage_build target=webgl development=false` 로 압축 적용 빌드 (~35~40 MB 예상). itch.io / 자체 호스팅 / GitHub Pages 등 배포 채널 선택. PlayerPrefs(localStorage) 도메인별 격리되는 점 주의 |
+| 2 | **재빌드된 .exe 로 UI 재검증 + 다른 PC 배포 테스트** | `Build/Win64/bowling demo.exe` 실행 후 게임 종료 화면 UI 정상 표시 확인 (2026-06-24 단계 3 수정 검증). Display 탭의 해상도/창모드/UI 스케일 변경이 다른 해상도 화면에서 실제로 반영되는지 함께 확인 |
+| 3 | **Play 모드 검증 + 점수 도메인 디버깅** | 새 점수판 UI 가 정상 동작하는지 쇼트/풀 양 모드로 확인. 같은 증상 (점수 계산 이상) 이 남아 있으면 `FrameManager` / `ScoreCalculator` 디버깅 |
+| 4 | **`TableLayoutRenderer` (옵션 C)** | 3행 테이블 (Frame / Throws / Score) 레이아웃. 2026-06-23 추상 베이스 답습 — 새 컴포넌트 1개 추가 + 인스펙터에서 layout 교체 |
+| 5 | **Accessibility 탭** | Bumper 모드 + 자동 조준 보조. 볼링 차별 항목 |
+| 6 | **UX 탭** | 카메라 거리 / 기록 초기화 (모달) / 세이브 폴더 열기 |
+| 7 | **튜토리얼 화면** | 형식 미결정 |
+| 8 | **FrameManagerTests 리팩토링** | 예외 기대 케이스 → fail-safe 명세 정렬 |
+| 9 | **UI 폴리싱** | 슬라이더 핸들 / 버튼 / RebindOverlay / FrameCard 디자인 통일 |
+| 10 | **mainmenu 게임종료 버튼 추가 검토** | 현재 mainmenu 에는 쇼트/풀/설정만 — 게임 종료 버튼 없음. UX 일관성 위해 추가 고려 (`Application.Quit()` + WebGL/Editor 분기 처리) |
 
 ---
 

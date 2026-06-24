@@ -65,6 +65,11 @@ namespace BowlingGame
             }
 
             ApplyBestScore(holder);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // 브라우저에선 페이지를 게임이 닫을 수 없으므로 종료 버튼 숨김.
+            quitButton.gameObject.SetActive(false);
+#endif
         }
 
         /// <summary>최고 점수 + 신기록 강조 표시 (선택 필드, 미할당 시 생략).</summary>
@@ -111,6 +116,8 @@ namespace BowlingGame
             Debug.Log("[GameOverUI] Quit 버튼 클릭 — 애플리케이션 종료");
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
+#elif UNITY_WEBGL
+            Debug.LogWarning("[GameOverUI] WebGL 빌드에선 Application.Quit 호출 불가 — 버튼은 숨겨져 있어야 함");
 #else
             Application.Quit();
 #endif

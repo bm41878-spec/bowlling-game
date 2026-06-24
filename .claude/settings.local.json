@@ -60,7 +60,17 @@
       "mcp__UnityMCP__manage_packages",
       "Bash(git *)",
       "Bash(awk 'NR==104 || NR==103 || NR==105' \"C:/Users/bmbm7/bowling demo/bowlling-game/.gitignore\")",
-      "mcp__UnityMCP__create_script"
+      "mcp__UnityMCP__create_script",
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-ChildItem -Recurse Build\\\\WebGL | Select-Object FullName, @{Name='SizeMB'; Expression={[math]::Round\\($_.Length/1MB, 2\\)}} | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Recurse Build\\\\WebGL -File | Select-Object @{N='Rel'; E={$_.FullName.Replace\\(\\(Resolve-Path 'Build\\\\WebGL'\\).Path + '\\\\',''\\)}}, @{N='MB';E={[math]::Round\\($_.Length/1MB,2\\)}} | Format-Table -AutoSize -Wrap)",
+      "PowerShell(Get-Command *)",
+      "Bash(python -m http.server 8080)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/)",
+      "PowerShell(Start-Process \"http://localhost:8080/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 2 http://localhost:8080/)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(netstat *)"
     ]
   }
 }

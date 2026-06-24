@@ -57,8 +57,13 @@ namespace BowlingGame
                 return;
             }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // 브라우저가 viewport 를 관리하며 ExclusiveFullScreen 은 보안 정책상 직접 호출 불가.
+            Debug.Log($"{LogPrefix} WebGL — 해상도/창모드 적용 스킵 ({width}x{height} {mode})");
+#else
             Screen.SetResolution(width, height, mode);
             Debug.Log($"{LogPrefix} 해상도 적용: {width}x{height} ({mode})");
+#endif
         }
 
         /// <summary>
