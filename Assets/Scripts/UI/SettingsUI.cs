@@ -62,7 +62,14 @@ namespace BowlingGame
 
         [Header("Footer")]
         [SerializeField] private Button backToMainMenuButton;
+        [SerializeField] private Button backButton;
         [SerializeField] private string mainMenuSceneName = "mainmenu";
+
+        /// <summary>
+        /// 인게임 ESC 오버레이로 설정이 열렸을 때 PauseMenuController 가 설정하는 복귀 핸들러.
+        /// 비어있지 않으면 "뒤로가기" 버튼은 메인메뉴로 가지 않고 이 핸들러(게임 재개)를 호출한다.
+        /// </summary>
+        public static System.Action PauseResumeHandler;
 
         // SaveData 캐시 — UI 입력 시 갱신 후 SaveSystem.Save 로 영속화.
         // 매 변경마다 Load 하지 않는 이유: UI 단일 인스턴스가 동시간 SaveData 의 유일 권한자.
@@ -73,6 +80,9 @@ namespace BowlingGame
 
         // 진행 중인 리바인딩 작업 — Cancel 또는 컴포넌트 파괴 시 Dispose.
         private InputActionRebindingExtensions.RebindingOperation _activeRebind;
+
+        /// <summary>리바인딩 입력 대기 중 여부 — PauseMenuController 가 ESC(취소) 와 일시정지 토글 충돌을 피하는 데 사용.</summary>
+        public static bool IsRebindActive { get; private set; }
 
         // Display 탭 — 드롭다운 인덱스 → 해상도 매핑.
         private List<Resolution> _supportedResolutions;
@@ -104,6 +114,7 @@ namespace BowlingGame
                 _activeRebind = null;
                 InputController.Instance?.ConfirmAction?.Enable();
             }
+            IsRebindActive = false;
         }
 
         // ---------- 바인딩 ----------
@@ -132,6 +143,24 @@ namespace BowlingGame
         {
             if (backToMainMenuButton != null)
                 backToMainMenuButton.onClick.AddListener(OnBackToMainMenu);
+            if (backButton != null)
+            {
+                // 인게임 ESC 오버레이로 열렸을 때만 노출 — 메인메뉴 단독 진입 시엔 기존 "메인메뉴" 버튼이 back 역할.
+                backButton.gameObject.SetActive(PauseResumeHandler != null);
+                backButton.onClick.AddListener(OnBackButton);
+            }
+        }
+
+        // "뒤로가기": 인게임 오버레이면 게임 재개(PauseResumeHandler), 메인메뉴 단독 진입이면 메인메뉴로.
+        private void OnBackButton()
+        {
+            if (PauseResumeHandler != null)
+            {
+                Debug.Log($"{LogPrefix} 뒤로가기 → 게임 재개");
+                PauseResumeHandler.Invoke();
+                return;
+            }
+            OnBackToMainMenu();
         }
 
         private void BindDisplayTab()
@@ -380,6 +409,7 @@ namespace BowlingGame
 
         private void BeginRebindOverlay(string overlayText)
         {
+            IsRebindActive = true;
             if (rebindOverlay != null) rebindOverlay.SetActive(true);
             if (rebindOverlayLabel != null) rebindOverlayLabel.text = overlayText;
         }
@@ -388,6 +418,7 @@ namespace BowlingGame
         {
             op.Dispose();
             _activeRebind = null;
+            IsRebindActive = false;
 
             var action = InputController.Instance?.ConfirmAction;
             action?.Enable();

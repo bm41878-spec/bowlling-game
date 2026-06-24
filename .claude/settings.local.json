@@ -59,7 +59,8 @@
       "PowerShell(Write-Output \"=== Assets/Models contents ===\"; Get-ChildItem \"Assets\\\\Models\" -Recurse -File | ForEach-Object { '{0,-50} {1,8} bytes  {2:MM-dd HH:mm}' -f $_.FullName.Replace\\($PWD.Path + '\\\\', ''\\), $_.Length, $_.LastWriteTime })",
       "mcp__UnityMCP__manage_packages",
       "Bash(git *)",
-      "Bash(awk 'NR==104 || NR==103 || NR==105' \"C:/Users/bmbm7/bowling demo/bowlling-game/.gitignore\")"
+      "Bash(awk 'NR==104 || NR==103 || NR==105' \"C:/Users/bmbm7/bowling demo/bowlling-game/.gitignore\")",
+      "mcp__UnityMCP__create_script"
     ]
   }
 }
