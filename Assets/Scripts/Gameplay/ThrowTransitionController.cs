@@ -46,6 +46,13 @@ namespace BowlingGame
         /// <summary>전이 처리 완료 시 결과와 함께 1회 발행.</summary>
         public event Action<TransitionResult> OnTransitionComplete;
 
+        /// <summary>
+        /// 거터볼 판정 시 1회 발행 — 공이 거터에 진입했고(<see cref="BowlingBall.EnteredGutterThisThrow"/>)
+        /// 이번 투구에서 핀이 <b>하나도</b> 쓰러지지 않은(newlyFallen == 0) 경우에만.
+        /// 사운드/보이스/연출 모듈이 구독한다.
+        /// </summary>
+        public event Action OnGutterBall;
+
         /// <summary>FrameManager 인스턴스 주입. GameManager 가 게임 시작 시 호출한다.</summary>
         public void Initialize(FrameManager frameManager)
         {
@@ -64,6 +71,13 @@ namespace BowlingGame
 
             // ===== 1. 카운트 획득 (핀이 아직 씬에 남아 있는 상태) =====
             int newlyFallen = pinManager.GetNewlyFallenCount();
+
+            // 거터 판정 — 거터 진입 + 0핀 동시 충족 시에만. (핀을 하나라도 치면 거터로 보지 않음)
+            if (ball != null && ball.EnteredGutterThisThrow && newlyFallen == 0)
+            {
+                Debug.Log("[Transition] 거터볼 판정 (거터 진입 + 0핀)");
+                OnGutterBall?.Invoke();
+            }
 
             // RecordThrow 전 시점의 프레임/투구 번호 캐싱 (로그용 + 스트라이크 판별)
             int currentFrameNo = frameManager.GetCurrentFrameIndex() + 1;

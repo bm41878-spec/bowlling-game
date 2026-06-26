@@ -10,7 +10,7 @@ namespace BowlingGame
         [SerializeField] TMP_Text powerValueText;
         [SerializeField] float minHeight = 20f;
         [SerializeField] float maxHeight = 160f;
-        [SerializeField] float gaugeSpeed = 1.5f;
+        [SerializeField] float gaugeSpeed = 0.75f;
 
         private float pingPongTime = 0f;
         private float currentNormalized = 0f;
@@ -77,7 +77,7 @@ namespace BowlingGame
 
             ConfirmedNormalized = currentNormalized;
             Debug.Log($"[PowerGauge] 세기 확정: {ConfirmedNormalized * 100:F1}%");
-            stateManager.ChangeState(GameState.Rolling);
+            stateManager.ChangeState(GameState.AimingSpin);
         }
 
         private Color GetGaugeColor(float normalized)

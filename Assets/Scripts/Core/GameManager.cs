@@ -45,6 +45,7 @@ namespace BowlingGame
         private GameStateManager stateManager;
 
         public FrameManager FrameManager => frameManager;
+        public ThrowTransitionController TransitionController => transitionController;
         public GameState CurrentState =>
             stateManager != null ? stateManager.CurrentState : GameState.Ready;
 
@@ -143,6 +144,7 @@ namespace BowlingGame
             {
                 case GameState.AimingPosition: OnEnterAimingPosition(); break;
                 case GameState.AimingPower:    OnEnterAimingPower();    break;
+                case GameState.AimingSpin:     OnEnterAimingSpin();     break;
                 case GameState.Rolling:        OnEnterRolling();        break;
                 case GameState.Scoring:        OnEnterScoring();        break;
                 case GameState.GameOver:       OnEnterGameOver();       break;
@@ -160,6 +162,11 @@ namespace BowlingGame
         private void OnEnterAimingPower()
         {
             // PowerGaugeUI 가 OnStateChanged 구독으로 본 상태 진입을 처리.
+        }
+
+        private void OnEnterAimingSpin()
+        {
+            // SpinGaugeUI 가 OnStateChanged 구독으로 본 상태 진입을 처리.
         }
 
         private void OnEnterRolling()

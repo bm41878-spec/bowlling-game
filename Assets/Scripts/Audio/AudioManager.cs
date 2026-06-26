@@ -46,6 +46,9 @@ namespace BowlingGame
         [Tooltip("굴림 같은 지속 SFX 전용 AudioSource. loop=true 권장. outputAudioMixerGroup = sfxGroup.")]
         [SerializeField] private AudioSource rollSource;
 
+        [Tooltip("스트라이크/스페어/거터 보이스 전용 AudioSource. 다른 SFX 와 겹쳐 재생되어도 서로 끊기지 않도록 분리. 미배선 시 sfxSource 로 폴백. outputAudioMixerGroup = sfxGroup.")]
+        [SerializeField] private AudioSource voiceSource;
+
         [Tooltip("조준 비프음 전용 AudioSource. panStereo 가 매 호출마다 바뀌므로 sfxSource 와 분리 (다른 SFX 패닝 오염 방지). outputAudioMixerGroup = sfxGroup.")]
         [SerializeField] private AudioSource aimBeepSource;
 
@@ -55,12 +58,21 @@ namespace BowlingGame
         [SerializeField] private AudioClip gutterClip;
         [SerializeField] private AudioClip ballRollClip;
 
+        [Header("Voice Clips (null 허용 — 미배선 시 LogWarning 후 무시)")]
+        [Tooltip("스트라이크 발생 시 재생할 보이스 (예: 아나운서 'Strike!'). 표시 연출은 AnnouncementController 가 별도 담당.")]
+        [SerializeField] private AudioClip strikeVoiceClip;
+        [Tooltip("스페어 발생 시 재생할 보이스 (예: 'Spare!').")]
+        [SerializeField] private AudioClip spareVoiceClip;
+        [Tooltip("거터 발생 시 재생할 보이스 (예: 'Gutter…').")]
+        [SerializeField] private AudioClip gutterVoiceClip;
+
         [Tooltip("조준 위치가 레인 좌/우 끝단에 도달했을 때 1회 재생되는 짧은 비프 ('삐'). 시각장애 접근성 — SaveData.aimingAudioGuide 가 ON 일 때만 BallAimer 가 호출.")]
         [SerializeField] private AudioClip aimEdgeBeepClip;
 
         // 현재 씬에서 구독 중인 참조 — 씬 전이 시 Unwire 에 사용.
         private BowlingBall subscribedBall;
         private FrameManager subscribedFrameManager;
+        private ThrowTransitionController subscribedTransition;
         private GameStateManager subscribedStateManager;
 
         void Awake()
@@ -110,9 +122,8 @@ namespace BowlingGame
             if (ball != null)
             {
                 ball.OnFirstPinContact += HandlePinHit;
-                ball.OnEnteredGutter   += HandleGutter;
                 subscribedBall = ball;
-                Debug.Log($"{LogPrefix} BowlingBall 이벤트 구독 (OnFirstPinContact / OnEnteredGutter)");
+                Debug.Log($"{LogPrefix} BowlingBall 이벤트 구독 (OnFirstPinContact)");
             }
 
             // GameStateManager 는 Rolling 진입/이탈을 굴림 사운드 Start/Stop 트리거로 사용.
@@ -125,34 +136,37 @@ namespace BowlingGame
                 Debug.Log($"{LogPrefix} GameStateManager.OnStateChanged 구독 (굴림 사운드)");
             }
 
-            // FrameManager 는 GameManager(ⓑ) 자식에 컴포넌트로 부착됨.
+            // FrameManager / TransitionController 는 GameManager 가 보유.
             // GameManager 가 [DefaultExecutionOrder(1000)] 이라 본 Start 시점엔 아직 Initialize 전일 수 있다.
             // 1회 시도 후 실패 시 코루틴으로 한 프레임 뒤 재시도.
-            if (!TryWireFrameManager())
-                StartCoroutine(WireFrameManagerDeferred());
+            if (!TryWireGameManagerRefs())
+                StartCoroutine(WireGameManagerRefsDeferred());
         }
 
-        private bool TryWireFrameManager()
+        private bool TryWireGameManagerRefs()
         {
             if (GameManager.Instance == null) return false;
             var fm = GameManager.Instance.FrameManager;
-            if (fm == null) return false;
+            var tc = GameManager.Instance.TransitionController;
+            if (fm == null || tc == null) return false;
 
-            fm.OnFrameCompleted += HandleFrameCompleted;
+            fm.OnFrameCompleted += HandleFrameCompleted;   // 스트라이크/스페어 사운드
             subscribedFrameManager = fm;
-            Debug.Log($"{LogPrefix} FrameManager.OnFrameCompleted 구독");
+            tc.OnGutterBall += HandleGutter;               // 거터 판정(거터 진입 + 0핀)
+            subscribedTransition = tc;
+            Debug.Log($"{LogPrefix} FrameManager.OnFrameCompleted / TransitionController.OnGutterBall 구독");
             return true;
         }
 
         // GameManager 의 DefaultExecutionOrder(1000) 보다 뒤늦은 시점에서 다시 시도.
         // 2프레임 마진을 두어 GameManager.Start 가 확실히 끝난 뒤 잡도록 한다.
-        private IEnumerator WireFrameManagerDeferred()
+        private IEnumerator WireGameManagerRefsDeferred()
         {
             yield return null;
             yield return null;
-            if (subscribedFrameManager != null) yield break;
-            if (!TryWireFrameManager())
-                Debug.Log($"{LogPrefix} FrameManager 미발견 — 현재 씬에 GameManager 없음 (mainmenu / Gameover_scene 정상)");
+            if (subscribedFrameManager != null && subscribedTransition != null) yield break;
+            if (!TryWireGameManagerRefs())
+                Debug.Log($"{LogPrefix} GameManager 미발견 — 현재 씬에 GameManager 없음 (mainmenu / Gameover_scene 정상)");
         }
 
         private void UnwireSceneRefs()
@@ -160,13 +174,17 @@ namespace BowlingGame
             if (subscribedBall != null)
             {
                 subscribedBall.OnFirstPinContact -= HandlePinHit;
-                subscribedBall.OnEnteredGutter   -= HandleGutter;
                 subscribedBall = null;
             }
             if (subscribedFrameManager != null)
             {
                 subscribedFrameManager.OnFrameCompleted -= HandleFrameCompleted;
                 subscribedFrameManager = null;
+            }
+            if (subscribedTransition != null)
+            {
+                subscribedTransition.OnGutterBall -= HandleGutter;
+                subscribedTransition = null;
             }
             if (subscribedStateManager != null)
             {
@@ -191,11 +209,24 @@ namespace BowlingGame
             StopBallRoll();
         }
 
-        private void HandleGutter() => PlayGutter();
+        private void HandleGutter()
+        {
+            PlayGutter();
+            PlayGutterVoice();
+        }
+
         private void HandleFrameCompleted(int frameIndex, Frame frame)
         {
-            if (frame != null && frame.IsStrike())
+            if (frame == null) return;
+            if (frame.IsStrike())
+            {
                 PlayStrike();
+                PlayStrikeVoice();
+            }
+            else if (frame.IsSpare())
+            {
+                PlaySpareVoice();
+            }
         }
 
         // Rolling 진입 시 굴림 사운드 시작, 이탈 시 정지.
@@ -211,6 +242,11 @@ namespace BowlingGame
         public void PlayPinHit() => PlayOneShotSafe(pinHitClip, "pinHit");
         public void PlayStrike() => PlayOneShotSafe(strikeClip, "strike");
         public void PlayGutter() => PlayOneShotSafe(gutterClip, "gutter");
+
+        // 보이스 — 전용 voiceSource(미배선 시 sfxSource 폴백)로 재생해 다른 SFX 와 겹쳐도 끊기지 않는다.
+        public void PlayStrikeVoice() => PlayVoiceSafe(strikeVoiceClip, "strikeVoice");
+        public void PlaySpareVoice()  => PlayVoiceSafe(spareVoiceClip,  "spareVoice");
+        public void PlayGutterVoice() => PlayVoiceSafe(gutterVoiceClip, "gutterVoice");
 
         /// <summary>
         /// 조준 끝단 비프 — pan 은 -1(완전 좌) ~ +1(완전 우). 전용 source 를 통해 패닝하므로
@@ -275,6 +311,24 @@ namespace BowlingGame
             }
             sfxSource.PlayOneShot(clip);
             Debug.Log($"{LogPrefix} 재생: {label}");
+        }
+
+        // 보이스 전용 — voiceSource 우선, 없으면 sfxSource 로 폴백. 클립/소스 모두 없으면 LogWarning 후 무시.
+        private void PlayVoiceSafe(AudioClip clip, string label)
+        {
+            if (clip == null)
+            {
+                Debug.LogWarning($"{LogPrefix} {label} 클립 미배선 — 재생 무시");
+                return;
+            }
+            var src = voiceSource != null ? voiceSource : sfxSource;
+            if (src == null)
+            {
+                Debug.LogWarning($"{LogPrefix} voiceSource/sfxSource 미배선 — {label} 재생 무시");
+                return;
+            }
+            src.PlayOneShot(clip);
+            Debug.Log($"{LogPrefix} 보이스 재생: {label}");
         }
 
         // ---------- 음량 ----------

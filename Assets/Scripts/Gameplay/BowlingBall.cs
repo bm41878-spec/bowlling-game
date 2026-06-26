@@ -13,12 +13,20 @@ namespace BowlingGame
         public event Action OnFirstPinContact;
 
         /// <summary>
-        /// 현재 투구에서 공이 처음 거터 영역(|x| &gt; 0.533)에 진입하는 순간 1회 발화.
+        /// 현재 투구에서 공이 처음 거터 영역(|x| &gt; 0.533)에 진입하는 순간 1회 발화하는 <b>저수준 즉시 신호</b>.
         /// Rolling 상태에서만 폴링하며, ResetBall() 에서 플래그가 리셋된다.
+        /// 거터 '판정'(거터 진입 + 0핀 동시 충족)은 <see cref="ThrowTransitionController"/> 가
+        /// <see cref="EnteredGutterThisThrow"/> 와 쓰러진 핀 수를 결합해 내린다(OnGutterBall).
         /// </summary>
         public event Action OnEnteredGutter;
         [SerializeField] float minForce = 8f;
         [SerializeField] float maxForce = 18f;
+
+        [Tooltip("커브 세기 계수(최대치 = 게이지 끝). Rolling 동안 매 FixedUpdate 마다 측면 힘 = spin × 이 값 × 전진속도 로 가해진다. spin 은 SpinGaugeUI 에서 직구 데드존 + 끝강조 지수가 적용된 값. 0 이면 항상 직구. 레인이 짧아(스폰~핀 ≈ 7.8u) 너무 크면 끝 스핀이 거터로 직행. Play 모드에서 조정.")]
+        [SerializeField] float curveStrength = 0.22f;
+
+        [Tooltip("이 전진속도(z) 미만이면 커브 적용 중단 — 거의 멈춘 공이 옆으로 미끄러지는 현상 방지.")]
+        [SerializeField] float curveMinForwardSpeed = 0.2f;
 
         // BallSpawnPoint 의 시작 위치 미발견 시 사용하는 fallback. Awake 에서 한 번 캐싱하여
         // 매 리셋마다 GameObject.Find 호출을 피한다.
@@ -32,6 +40,9 @@ namespace BowlingGame
         private Rigidbody rb;
         private BallAimer ballAimer;
         private PowerGaugeUI powerGauge;
+        private SpinGaugeUI spinGauge;
+        /// <summary>이번 투구에 확정된 회전값 [-1(좌)~+1(우)]. 발사 시 캐싱, ResetBall 에서 0 으로 리셋.</summary>
+        private float confirmedSpin = 0f;
         private GameStateManager stateManager;
         private InputController inputController;
         private Transform spawnPoint;
@@ -57,8 +68,9 @@ namespace BowlingGame
             stateManager    = GameStateManager.Instance;
             inputController = InputController.Instance;
             ballAimer       = GetComponent<BallAimer>();
-            // PowerGaugeUI는 비활성 자식까지 포함해 탐색
+            // PowerGaugeUI / SpinGaugeUI는 비활성 자식까지 포함해 탐색
             powerGauge = FindFirstObjectByType<PowerGaugeUI>(FindObjectsInactive.Include);
+            spinGauge  = FindFirstObjectByType<SpinGaugeUI>(FindObjectsInactive.Include);
 
             stateManager.OnStateChanged += HandleStateChanged;
         }
@@ -80,9 +92,10 @@ namespace BowlingGame
             transform.position = launchPos;
 
             float force = powerGauge.ConfirmedNormalized;
+            confirmedSpin = spinGauge != null ? spinGauge.ConfirmedSpin : 0f;
             Launch(launchPos, force);
 
-            Debug.Log($"[Ball] 발사! 위치: {launchPos.x:F2}, 세기: {force * 100:F1}%");
+            Debug.Log($"[Ball] 발사! 위치: {launchPos.x:F2}, 세기: {force * 100:F1}%, 회전: {confirmedSpin:F2}");
             // Scoring 전이는 GameManager 가 PhysicsSettleDetector.OnSettled 를 받아 처리한다.
         }
 
@@ -127,6 +140,9 @@ namespace BowlingGame
             // 사운드/이펙트 1회 발화 플래그 리셋 — 다음 투구에서 재발화 가능 (조건 3: 리스폰 시 재생 가능).
             hasPlayedPinHitThisThrow = false;
             hasEnteredGutterThisThrow = false;
+
+            // 회전값 리셋 — 다음 투구는 새 스핀 게이지 확정 전까지 직구.
+            confirmedSpin = 0f;
         }
 
         /// <summary>
@@ -225,6 +241,12 @@ namespace BowlingGame
         // 효과음 후크는 OnEnteredGutter 이벤트(아래 Update 폴링) 로 노출되며, 점수 시스템 연계는 추후 Phase.
         public bool IsInGutter => Mathf.Abs(transform.position.x) > 0.533f;
 
+        /// <summary>
+        /// 이번 투구에서 공이 거터 영역에 진입한 적이 있는지. <see cref="ResetBall"/> 에서 리셋된다.
+        /// 거터 판정(거터 진입 + 0핀)에 <see cref="ThrowTransitionController"/> 가 사용한다.
+        /// </summary>
+        public bool EnteredGutterThisThrow => hasEnteredGutterThisThrow;
+
         void Update()
         {
             // Rolling 상태에서만 거터 진입 폴링. Aiming/Scoring/Ready 등은 무시.
@@ -236,6 +258,21 @@ namespace BowlingGame
             hasEnteredGutterThisThrow = true;
             Debug.Log($"[Ball] 거터 진입 감지 (x={transform.position.x:F2})");
             OnEnteredGutter?.Invoke();
+        }
+
+        // 커브 적용 — Rolling 동안 전진속도에 비례한 측면 힘을 가해 공이 호를 그리며 휘게 한다.
+        // 측면 힘이 전진속도에 비례하므로 빠른 공일수록 굴절이 균일하게 유지되고, 공이 멈추면 자연히 0 으로 수렴.
+        void FixedUpdate()
+        {
+            if (stateManager == null) return;
+            if (stateManager.CurrentState != GameState.Rolling) return;
+            if (rb.isKinematic) return;
+            if (Mathf.Approximately(confirmedSpin, 0f)) return;
+
+            float forwardSpeed = rb.linearVelocity.z;
+            if (forwardSpeed < curveMinForwardSpeed) return;
+
+            rb.AddForce(Vector3.right * confirmedSpin * curveStrength * forwardSpeed, ForceMode.Force);
         }
 
         void OnCollisionEnter(Collision collision)

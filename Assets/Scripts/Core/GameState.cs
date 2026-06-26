@@ -5,6 +5,7 @@ namespace BowlingGame
         Ready,
         AimingPosition,
         AimingPower,
+        AimingSpin,
         Rolling,
         Scoring,
         GameOver,
