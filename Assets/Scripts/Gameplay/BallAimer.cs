@@ -102,6 +102,9 @@ namespace BowlingGame
             {
                 isAiming = false;
                 if (rb != null) rb.isKinematic = false;
+                // 조준(위치) 절차 종료 — 끝단 비프 latch 해제 + 재생 중이던 비프 즉시 정지.
+                edgeLatched = false;
+                AudioManager.Instance?.StopAimBeep();
             }
         }
 

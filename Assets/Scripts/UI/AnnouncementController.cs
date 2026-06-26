@@ -57,6 +57,9 @@ namespace BowlingGame
         private RectTransform rect;
         private Coroutine playing;
 
+        /// <summary>현재 연출(이미지)이 재생 중인지. 게임오버 전환을 연출이 끝날 때까지 지연하는 데 사용.</summary>
+        public bool IsPlaying => playing != null;
+
         // 구독 추적 (씬 종료 시 해제)
         private FrameManager subscribedFrameManager;
         private ThrowTransitionController subscribedTransition;

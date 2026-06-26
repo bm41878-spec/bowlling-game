@@ -46,11 +46,6 @@ namespace BowlingGame
         private InputController inputController;
         private Image markerImage;
 
-        // 접근성 — 좌/우 끝단 도달 시 1회 비프 (BallAimer 패턴 답습).
-        private bool audioGuideEnabled;
-        private bool edgeLatched;
-        private const float EdgeThreshold = 0.95f;
-
         void Start()
         {
             stateManager    = GameStateManager.Instance;
@@ -80,8 +75,6 @@ namespace BowlingGame
 
             if (spinValueText != null)
                 spinValueText.text = FormatSpin(currentSigned);
-
-            if (audioGuideEnabled) UpdateEdgeBeep(currentSigned);
         }
 
         private void HandleStateChanged(GameState prev, GameState next)
@@ -92,8 +85,6 @@ namespace BowlingGame
                 pingPongTime = 0f;
                 // 같은 프레임 confirm 캐스케이드 방지 (PowerGaugeUI 가 같은 입력으로 AimingPower→AimingSpin 전이를 트리거).
                 enteredFrame = Time.frameCount;
-                audioGuideEnabled = SaveSystem.Load().aimingAudioGuide;
-                edgeLatched = false;
             }
             if (prev == GameState.AimingSpin)
                 gameObject.SetActive(false);
@@ -108,22 +99,6 @@ namespace BowlingGame
             string side = ConfirmedSpin < 0f ? "좌" : ConfirmedSpin > 0f ? "우" : "직구";
             Debug.Log($"[SpinGauge] 회전 확정: {side} (게이지 {currentSigned:F2} → 적용 {ConfirmedSpin:F2})");
             stateManager.ChangeState(GameState.Rolling);
-        }
-
-        // 좌/우 끝단 도달 시 1회 비프 — pan 은 부호 그대로. BallAimer 의 hysteresis 패턴 답습.
-        private void UpdateEdgeBeep(float signed)
-        {
-            float a = Mathf.Abs(signed);
-            if (a >= EdgeThreshold)
-            {
-                if (edgeLatched) return;
-                edgeLatched = true;
-                AudioManager.Instance?.PlayAimEdgeBeep(signed > 0f ? 1f : -1f);
-            }
-            else if (a < EdgeThreshold * 0.7f)
-            {
-                edgeLatched = false;
-            }
         }
 
         // 게이지 위치(raw, -1~+1)를 실제 적용 회전값으로 변환:

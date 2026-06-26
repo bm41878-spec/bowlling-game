@@ -58,13 +58,13 @@ namespace BowlingGame
         [SerializeField] private AudioClip gutterClip;
         [SerializeField] private AudioClip ballRollClip;
 
-        [Header("Voice Clips (null 허용 — 미배선 시 LogWarning 후 무시)")]
-        [Tooltip("스트라이크 발생 시 재생할 보이스 (예: 아나운서 'Strike!'). 표시 연출은 AnnouncementController 가 별도 담당.")]
-        [SerializeField] private AudioClip strikeVoiceClip;
-        [Tooltip("스페어 발생 시 재생할 보이스 (예: 'Spare!').")]
-        [SerializeField] private AudioClip spareVoiceClip;
-        [Tooltip("거터 발생 시 재생할 보이스 (예: 'Gutter…').")]
-        [SerializeField] private AudioClip gutterVoiceClip;
+        [Header("Voice Clips (이벤트 발생 시 배열에서 랜덤 1개 재생. 비어 있으면 LogWarning 후 무시)")]
+        [Tooltip("스트라이크 발생 시 재생할 보이스 후보들 (랜덤 선택). 표시 연출은 AnnouncementController 가 별도 담당.")]
+        [SerializeField] private AudioClip[] strikeVoiceClips;
+        [Tooltip("스페어 발생 시 재생할 보이스 후보들 (랜덤 선택).")]
+        [SerializeField] private AudioClip[] spareVoiceClips;
+        [Tooltip("거터 발생 시 재생할 보이스 후보들 (랜덤 선택).")]
+        [SerializeField] private AudioClip[] gutterVoiceClips;
 
         [Tooltip("조준 위치가 레인 좌/우 끝단에 도달했을 때 1회 재생되는 짧은 비프 ('삐'). 시각장애 접근성 — SaveData.aimingAudioGuide 가 ON 일 때만 BallAimer 가 호출.")]
         [SerializeField] private AudioClip aimEdgeBeepClip;
@@ -243,10 +243,11 @@ namespace BowlingGame
         public void PlayStrike() => PlayOneShotSafe(strikeClip, "strike");
         public void PlayGutter() => PlayOneShotSafe(gutterClip, "gutter");
 
-        // 보이스 — 전용 voiceSource(미배선 시 sfxSource 폴백)로 재생해 다른 SFX 와 겹쳐도 끊기지 않는다.
-        public void PlayStrikeVoice() => PlayVoiceSafe(strikeVoiceClip, "strikeVoice");
-        public void PlaySpareVoice()  => PlayVoiceSafe(spareVoiceClip,  "spareVoice");
-        public void PlayGutterVoice() => PlayVoiceSafe(gutterVoiceClip, "gutterVoice");
+        // 보이스 — 배열에서 랜덤 1개 선택. 전용 voiceSource(미배선 시 sfxSource 폴백)로 재생해 다른 SFX 와 겹쳐도 끊기지 않는다.
+        // 두 source 모두 outputAudioMixerGroup = SFX 라 설정의 효과음 볼륨에 연동된다.
+        public void PlayStrikeVoice() => PlayRandomVoice(strikeVoiceClips, "strikeVoice");
+        public void PlaySpareVoice()  => PlayRandomVoice(spareVoiceClips,  "spareVoice");
+        public void PlayGutterVoice() => PlayRandomVoice(gutterVoiceClips, "gutterVoice");
 
         /// <summary>
         /// 조준 끝단 비프 — pan 은 -1(완전 좌) ~ +1(완전 우). 전용 source 를 통해 패닝하므로
@@ -266,6 +267,13 @@ namespace BowlingGame
             }
             aimBeepSource.panStereo = Mathf.Clamp(pan, -1f, 1f);
             aimBeepSource.PlayOneShot(aimEdgeBeepClip);
+        }
+
+        /// <summary>재생 중인 조준 비프를 즉시 멈춘다. 조준(위치) 절차가 끝나는 순간 잔여 비프음을 끊는 용도.</summary>
+        public void StopAimBeep()
+        {
+            if (aimBeepSource != null && aimBeepSource.isPlaying)
+                aimBeepSource.Stop();
         }
 
         // 굴림 사운드 — PlayOneShot 이 아닌 별도 source 의 Play/Stop 패턴 (loop=true 전제).
@@ -313,6 +321,35 @@ namespace BowlingGame
             Debug.Log($"{LogPrefix} 재생: {label}");
         }
 
+        // 배열에서 비어있지 않은 클립 중 랜덤 1개를 골라 재생. 배열/요소가 모두 없으면 LogWarning 후 무시.
+        private void PlayRandomVoice(AudioClip[] clips, string label)
+        {
+            var clip = PickRandomClip(clips);
+            if (clip == null)
+            {
+                Debug.LogWarning($"{LogPrefix} {label} 클립 배열이 비어있음 — 재생 무시");
+                return;
+            }
+            PlayVoiceSafe(clip, label);
+        }
+
+        // null 요소를 제외하고 균등 확률로 1개 선택. 후보가 없으면 null.
+        private AudioClip PickRandomClip(AudioClip[] clips)
+        {
+            if (clips == null || clips.Length == 0) return null;
+            int count = 0;
+            for (int i = 0; i < clips.Length; i++) if (clips[i] != null) count++;
+            if (count == 0) return null;
+            int pick = UnityEngine.Random.Range(0, count);
+            for (int i = 0; i < clips.Length; i++)
+            {
+                if (clips[i] == null) continue;
+                if (pick == 0) return clips[i];
+                pick--;
+            }
+            return null;
+        }
+
         // 보이스 전용 — voiceSource 우선, 없으면 sfxSource 로 폴백. 클립/소스 모두 없으면 LogWarning 후 무시.
         private void PlayVoiceSafe(AudioClip clip, string label)
         {
@@ -328,7 +365,7 @@ namespace BowlingGame
                 return;
             }
             src.PlayOneShot(clip);
-            Debug.Log($"{LogPrefix} 보이스 재생: {label}");
+            Debug.Log($"{LogPrefix} 보이스 재생: {label} ({clip.name})");
         }
 
         // ---------- 음량 ----------

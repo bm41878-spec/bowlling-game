@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Bowling.Scoring;
@@ -42,7 +43,12 @@ namespace BowlingGame
         [Tooltip("씬에 배치된 FrameManager 호스트 GameObject. Initialize() 로 게임 시작 시 주입.")]
         [SerializeField] private FrameManager frameManager;
 
+        [Header("GameOver")]
+        [Tooltip("마지막 투구의 스트라이크/스페어/거터 연출이 끝날 때까지 결과 화면 전환을 지연하는 최대 대기 시간(초). 연출이 더 빨리 끝나면 그 즉시 전환. 안전장치.")]
+        [SerializeField] private float gameOverAnnouncementMaxWait = 5f;
+
         private GameStateManager stateManager;
+        private AnnouncementController announcementController;
 
         public FrameManager FrameManager => frameManager;
         public ThrowTransitionController TransitionController => transitionController;
@@ -195,8 +201,28 @@ namespace BowlingGame
             // 최고 점수 기록 (Phase 8 — JSON 영속화). 실패해도 게임 흐름은 막지 않음 (SaveSystem fail-safe).
             var record = HighScoreService.Record(ruleConfig.ModeName, ruleConfig.FrameCount, score);
 
-            // 결과를 다음 씬으로 전달 + Gameover_scene 로드.
+            // 결과를 다음 씬으로 전달.
             GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName, record.BestScore, record.IsNewRecord);
+
+            // 마지막 투구의 스트라이크/스페어/거터 연출(이미지)이 재생 중이면 끝까지 보여준 뒤 결과 화면으로 전환한다.
+            // (보이스는 AudioManager 가 DontDestroyOnLoad 라 씬 전환 후에도 끊기지 않고 이어서 재생됨)
+            StartCoroutine(LoadGameOverWhenAnnouncementDone());
+        }
+
+        // 연출이 끝날 때(또는 최대 대기 도달)까지 기다렸다가 Gameover_scene 로드.
+        // 연출이 없으면(스트라이크/스페어/거터 아님) 대기 없이 즉시 전환.
+        private IEnumerator LoadGameOverWhenAnnouncementDone()
+        {
+            if (announcementController == null)
+                announcementController = FindFirstObjectByType<AnnouncementController>(FindObjectsInactive.Include);
+
+            float waited = 0f;
+            while (announcementController != null && announcementController.IsPlaying && waited < gameOverAnnouncementMaxWait)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
             SceneManager.LoadScene(GAMEOVER_SCENE_NAME);
         }
 
