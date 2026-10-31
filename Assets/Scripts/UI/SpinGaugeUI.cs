@@ -12,6 +12,9 @@ namespace BowlingGame
     /// 값 매핑: 마커의 중앙 기준 부호 = 커브 방향(좌 −, 우 +), 거리 = 커브 양.
     /// <see cref="ConfirmedSpin"/> ∈ [-1, +1] (중앙 0 = 직구). <see cref="BowlingBall"/> 가 발사 시 읽어 커브에 사용.
     /// 상태 흐름: AimingPower(세기 확정) → <b>AimingSpin(본 게이지)</b> → Rolling(발사).
+    /// 단, 접근성 설정 <c>SaveData.spinControlEnabled</c> 가 OFF 면 본 단계는 생략되어
+    /// AimingPower → Rolling 으로 직행한다 (PowerGaugeUI 가 분기). 이때 직구 보장을 위해
+    /// 본 클래스가 AimingPosition 진입마다 <see cref="ConfirmedSpin"/> 을 0 으로 리셋한다.
     /// </remarks>
     public class SpinGaugeUI : MonoBehaviour
     {
@@ -41,6 +44,12 @@ namespace BowlingGame
 
         /// <summary>확정된 회전값 [-1(좌) ~ +1(우)]. 중앙 0 = 직구.</summary>
         public float ConfirmedSpin { get; private set; }
+
+        /// <summary>
+        /// 현재 마커 위치의 실효 회전값 (직구 데드존 + 끝강조 지수 적용).
+        /// AimingSpin 진행 중 AimGuide 가 실시간 곡선 미리보기에 사용 — 확정 전 값이므로 발사에는 쓰지 말 것.
+        /// </summary>
+        public float CurrentShapedSpin => ShapeSpin(currentSigned);
 
         private GameStateManager stateManager;
         private InputController inputController;
@@ -79,6 +88,12 @@ namespace BowlingGame
 
         private void HandleStateChanged(GameState prev, GameState next)
         {
+            // 새 투구 사이클 시작 — 직전 투구의 확정 회전값 잔존 방지.
+            // 커브볼 조작 OFF(SaveData.spinControlEnabled=false) 로 본 단계가 생략되면
+            // BowlingBall.ExecuteLaunch 가 이 프로퍼티의 stale 값을 읽게 되므로 여기서 0(직구) 초기화.
+            if (next == GameState.AimingPosition)
+                ConfirmedSpin = 0f;
+
             if (next == GameState.AimingSpin)
             {
                 gameObject.SetActive(true);

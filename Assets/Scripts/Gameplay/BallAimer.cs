@@ -91,8 +91,14 @@ namespace BowlingGame
                 pingPongTime = 0f;
                 // 동일 프레임 confirm 캐스케이드 방지 (다른 핸들러가 이 프레임에 상태를 AimingPosition으로 바꿨을 수 있음)
                 enteredFrame = Time.frameCount;
-                // 물리 엔진이 transform 직접 제어를 방해하지 않도록 kinematic 전환
-                if (rb != null) { rb.linearVelocity = Vector3.zero; rb.isKinematic = true; }
+                // 물리 엔진이 transform 직접 제어를 방해하지 않도록 kinematic 전환.
+                // velocity 클리어는 동적일 때만 — 이미 kinematic 인 경우(ForceResetCoroutine 진행 중
+                // 상태 전이가 겹친 케이스) velocity setter 는 Unity 경고 + 무시.
+                if (rb != null)
+                {
+                    if (!rb.isKinematic) rb.linearVelocity = Vector3.zero;
+                    rb.isKinematic = true;
+                }
                 // 조준 사이클 진입 시점에 접근성 설정 1회 캐싱 — 매 프레임 I/O 방지.
                 audioGuideEnabled = SaveSystem.Load().aimingAudioGuide;
                 edgeLatched = false;

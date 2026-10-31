@@ -70,7 +70,10 @@
       "PowerShell(Start-Process \"http://localhost:8080/\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 2 http://localhost:8080/)",
       "PowerShell(Get-NetTCPConnection *)",
-      "PowerShell(netstat *)"
+      "PowerShell(netstat *)",
+      "PowerShell([guid]::NewGuid\\(\\).ToString\\(\"N\"\\))",
+      "PowerShell(Get-Content *)",
+      "PowerShell($s = Get-Content \"Assets\\\\Scenes\\\\settings.unity\" -Raw; $a = \\([regex]::Matches\\($s, '&19000010\\\\d\\\\d'\\)\\).Count; $b = \\([regex]::Matches\\($s, '&19000020\\\\d\\\\d'\\)\\).Count; $refA = \\([regex]::Matches\\($s, 'fileID: 19000010'\\)\\).Count; $refB = \\([regex]::Matches\\($s, 'fileID: 19000020'\\)\\).Count; \"anchors A=$a B=$b refs A=$refA B=$refB\"; $g = Get-Content \"Assets\\\\Scenes\\\\Game.unity\" -Raw; \"Game anchors 134433151: \" + \\([regex]::Matches\\($g, '&134433151'\\)\\).Count + \" / refs: \" + \\([regex]::Matches\\($g, 'fileID: 134433151'\\)\\).Count + \" / guid: \" + \\([regex]::Matches\\($g, '62dba05f4f2ae55438e8672f11218596'\\)\\).Count)"
     ]
   }
 }

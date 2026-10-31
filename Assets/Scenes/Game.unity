@@ -165,6 +165,7 @@ GameObject:
   - component: {fileID: 134433149}
   - component: {fileID: 134433148}
   - component: {fileID: 134433147}
+  - component: {fileID: 134433151}
   m_Layer: 0
   m_Name: BowlingBall
   m_TagString: Untagged
@@ -259,6 +260,28 @@ MonoBehaviour:
   laneHalfWidth: 0.43
   oscSpeed: 0.5
   ballStartZ: 0.5
+--- !u!114 &134433151
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 134433143}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62dba05f4f2ae55438e8672f11218596, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::BowlingGame.AimGuide
+  ball: {fileID: 134433148}
+  spinGauge: {fileID: 0}
+  powerGauge: {fileID: 0}
+  lineMaterial: {fileID: 0}
+  guideEndZ: 8.3
+  samples: 24
+  lineY: 0.03
+  widthStart: 0.08
+  widthEnd: 0.03
+  gutterX: 0.533
 --- !u!114 &134433148
 MonoBehaviour:
   m_ObjectHideFlags: 0

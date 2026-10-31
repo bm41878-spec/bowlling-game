@@ -15,6 +15,10 @@ namespace BowlingGame
         private float pingPongTime = 0f;
         private float currentNormalized = 0f;
         private int enteredFrame = -1;
+        // 접근성 — 커브볼 조작 단계 활성 여부 (SaveData.spinControlEnabled).
+        // AimingPower 진입 시 1회 캐싱 (BallAimer.audioGuideEnabled 와 동일 정책 — 매 프레임 I/O 방지,
+        // 설정 변경은 다음 세기 결정 단계부터 반영). true = 세기 확정 후 AimingSpin, false = 바로 Rolling.
+        private bool spinStageEnabled;
         public float ConfirmedNormalized { get; private set; }
 
         private GameStateManager stateManager;
@@ -65,6 +69,8 @@ namespace BowlingGame
                 // 같은 프레임에 전이가 일어났다면 진입 직후의 confirm 입력은 무시한다
                 // (BallAimer가 동일 입력 이벤트로 AimingPosition→AimingPower 전이를 트리거할 수 있음)
                 enteredFrame = Time.frameCount;
+                // 커브볼 조작 설정 1회 캐싱 — 확정 시 다음 상태 분기에 사용.
+                spinStageEnabled = SaveSystem.Load().spinControlEnabled;
             }
             if (prev == GameState.AimingPower)
                 gameObject.SetActive(false);
@@ -76,8 +82,11 @@ namespace BowlingGame
             if (Time.frameCount == enteredFrame) return;
 
             ConfirmedNormalized = currentNormalized;
-            Debug.Log($"[PowerGauge] 세기 확정: {ConfirmedNormalized * 100:F1}%");
-            stateManager.ChangeState(GameState.AimingSpin);
+            Debug.Log($"[PowerGauge] 세기 확정: {ConfirmedNormalized * 100:F1}%" +
+                      (spinStageEnabled ? "" : " (커브볼 조작 OFF — 스핀 단계 생략, 직구 발사)"));
+            // 접근성 옵션 분기 — ON: 3단계 (회전 게이지로), OFF: 2단계 (즉시 발사).
+            // OFF 경로의 직구 보장은 SpinGaugeUI 가 AimingPosition 진입 시 ConfirmedSpin=0 으로 리셋하여 담당.
+            stateManager.ChangeState(spinStageEnabled ? GameState.AimingSpin : GameState.Rolling);
         }
 
         private Color GetGaugeColor(float normalized)

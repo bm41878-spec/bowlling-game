@@ -48,5 +48,16 @@ namespace BowlingGame
         // 현재는 UI 노출 + 저장만, 실제 셰이더/머티리얼 보정은 추후 업데이트.
         // int 의 기본값 0 이 "Off" 와 일치하므로 마이그레이션 보정 불필요.
         public int colorblindMode = 0;
+
+        // spinControlEnabled: 커브볼(스핀) 조작 단계 활성화 (2026-07-09 추가).
+        // ON  = 조준 3단계 (위치 → 세기 → 회전), OFF = 2단계 (위치 → 세기, 항상 직구).
+        // PowerGaugeUI 가 세기 확정 시 다음 상태(AimingSpin vs Rolling) 분기에 사용.
+        // bool 기본값 false = "미설정 == 2단계(단순 조작)" — 저학년 기본 동선과 일치, 마이그레이션 보정 불필요.
+        public bool spinControlEnabled = false;
+
+        // aimGuideEnabled: 조준 중 공의 예상 경로를 레인 위에 선/곡선으로 표시 (2026-07-09 추가).
+        // AimingPosition/AimingPower 는 직선, AimingSpin 은 실시간 곡선 미리보기. AimGuide 컴포넌트가
+        // AimingPosition 진입 시점에 캐싱해 사용. bool 기본값 false — 마이그레이션 보정 불필요.
+        public bool aimGuideEnabled = false;
     }
 }

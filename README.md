@@ -766,6 +766,52 @@ M  ProjectSettings/EditorBuildSettings.asset
 
 **의도(추정)**: 단일 톤이던 레인을 다색 구간으로 분할하여 시각적 구분 강화. 정확한 인스턴스별 트랜스폼/머티리얼 매핑은 Editor 에서 직접 확인 (본 세션 종료 시점 Unity MCP 일시 연결 끊김으로 자동 인벤토리 미생성).
 
+### 14-17. 후속 세션 변경 (2026-07-09) — kinematic/velocity 대입 순서 버그 수정
+
+`PROJECT_REVIEW_2026-07-09.md` §2-2 P1 지적 사항 반영. kinematic 상태의 Rigidbody 에 velocity setter 를 호출하면 Unity 경고 + 대입 무시 — `ResetBall` 1단계는 이미 방어하고 있었으나 두 곳이 누락되어 있었다.
+
+| 파일 | 수정 |
+|---|---|
+| `Assets/Scripts/Gameplay/BowlingBall.cs` | `ForceResetCoroutine` — kinematic 전환 **후** velocity 대입하던 순서를 `ResetBall` 과 동일하게 교정 (동적일 때만 velocity 클리어 → kinematic 전환) |
+| `Assets/Scripts/Gameplay/BallAimer.cs` | `HandleStateChanged` AimingPosition 진입 블록 — velocity 클리어에 `!rb.isKinematic` 가드 추가 (ForceResetCoroutine 진행 중 상태 전이가 겹치는 엣지 케이스 방어) |
+
+`ResetBall` 6단계 패턴·public API 는 변경 없음 (§7 "건드리지 말 것" 저촉 없음). 검증: 사용자 Play 모드 — 일반 투구 리셋 + 콘솔 경고 0 확인.
+
+### 14-18. 후속 세션 변경 (2026-07-09) — 커브볼 조작을 접근성 옵션으로 전환
+
+**동기**: 커브볼(스핀) 단계는 저학년이 의미를 이해하기 어려운 입력 단계 — 접근성 탭 토글로 이동. OFF(기본)면 조준 2단계 (위치→세기, 항상 직구), ON 이면 기존 3단계 (위치→세기→회전).
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Persistence/SaveData.cs` | `spinControlEnabled` (bool, 기본 false) 추가. bool 기본값 = 미설정 = 2단계라 마이그레이션 보정 불필요 |
+| `Assets/Scripts/UI/PowerGaugeUI.cs` | AimingPower 진입 시 설정 1회 캐싱 (BallAimer.audioGuideEnabled 정책 답습). 세기 확정 시 `spinStageEnabled ? AimingSpin : Rolling` 분기 |
+| `Assets/Scripts/UI/SpinGaugeUI.cs` | **AimingPosition 진입마다 `ConfirmedSpin = 0` 리셋** — 단계 생략 시 BowlingBall 이 직전 투구의 stale 회전값을 읽는 버그 방어 (직구 보장의 단일 지점) |
+| `Assets/Scripts/UI/SettingsUI.cs` | Accessibility 탭에 `spinControlToggle` SerializeField + `BindAccessibilityTab` 바인딩 + `OnSpinControlChanged` 핸들러 (audioGuideToggle 패턴 동일 — 저장만, 게임 측 반영은 PowerGaugeUI 캐싱) |
+
+`GameState.AimingSpin` enum / GameManager 스위치 / SpinGaugeUI 게이지 로직은 변경 없음. 설정 변경 반영 시점: 다음 세기 결정 단계부터 (ESC 일시정지 중 변경 포함).
+
+**✅ 씬 배선 완료 (2026-07-09 후속, YAML 직접 편집)**: `AccessibilityPanel` 에 `Row_SpinControl` (fileID 1900001001~1021, Row_AudioGuide 구조 복제) 생성 — Label "커브볼 조작" + `Toggle_SpinControl` (Toggle 컴포넌트 fileID 1900001013) + `SettingsUI.spinControlToggle` 필드 배선. 기존 Row_AudioGuide / Row_Colorblind 아래에 배치 (VerticalLayoutGroup 자식 순서 = 표시 순서).
+
+### 14-19. 후속 세션 변경 (2026-07-09) — 예상 경로 가이드 (Aim Guide)
+
+**동기**: 조준 결과 예측선 부재 (`PROJECT_REVIEW_2026-07-09.md` §1-2③). 조준 중 공의 예상 경로를 레인 위에 선(직구)/곡선(커브)으로 표시 — 저학년이 스핀↔경로의 인과를 시각적으로 학습 가능. 접근성 탭 토글로 ON/OFF.
+
+**상태별 동작**: AimingPosition = 왕복하는 공을 따라 직선 / AimingPower = 확정 위치에서 직선 (2단계 모드는 여기까지) / AimingSpin = 스핀 마커의 실시간 값 + 확정 세기로 곡선 미리보기 (마커 따라 실시간 굴절). 예측선이 거터 영역에 닿으면 그 지점에서 잘라 거터행을 시각화.
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Gameplay/AimGuide.cs` | **신규.** LineRenderer 자동 생성(자식 GO), 상태 구독으로 표시 제어, 매 프레임 경로 갱신. 참조(ball/spinGauge/powerGauge) 미배선 시 자동 탐색. `SaveData.aimGuideEnabled` 를 AimingPosition 진입 시 1회 캐싱 |
+| `Assets/Scripts/Gameplay/BowlingBall.cs` | `PredictLateralOffset(spin, normalizedForce, dz)` 추가 — FixedUpdate 커브 물리(측면힘 = spin×curveStrength×전진속도)와 상수를 공유하는 포물선 근사 (마찰 무시). 커브 물리 상수의 단일 출처 유지 |
+| `Assets/Scripts/UI/SpinGaugeUI.cs` | `CurrentShapedSpin` 프로퍼티 추가 — 마커 실시간 값에 ShapeSpin(데드존+끝강조) 적용. 미리보기 전용 (발사에는 ConfirmedSpin 사용) |
+| `Assets/Scripts/Persistence/SaveData.cs` | `aimGuideEnabled` (bool, 기본 false) 추가 |
+| `Assets/Scripts/UI/SettingsUI.cs` | Accessibility 탭 `aimGuideToggle` + 바인딩 + `OnAimGuideChanged` 핸들러 (spinControlToggle 패턴 동일) |
+
+**✅ 씬 배선 완료 (2026-07-09 후속, YAML 직접 편집)**:
+1. `Game.unity` — `BowlingBall` GameObject 에 `AimGuide` 컴포넌트 추가 (fileID 134433151, 스크립트 GUID `62dba05f...`). `ball` 필드는 같은 GO 의 BowlingBall(134433148) 직접 참조, spinGauge/powerGauge 는 자동 탐색(fileID 0). 직렬화 기본값: guideEndZ 8.3 / samples 24 / lineY 0.03 / 폭 0.08→0.03 / gutterX 0.533
+2. `settings.unity` — `Row_AimGuide` (fileID 1900002001~1021) + Label "예상 경로 표시" + `Toggle_AimGuide` (1900002013) + `SettingsUI.aimGuideToggle` 배선. Row_SpinControl 바로 아래 배치
+
+**잔여 (선택)**: `lineMaterial` 미배선 — Sprites/Default 런타임 폴백으로 동작하나 빌드 셰이더 스트리핑 가능성. Editor 에서 `Assets/Materials/Mat_AimGuide.mat` (URP/Unlit) 생성 후 BowlingBall 의 AimGuide → Line Material 에 할당 권장.
+
 ### 14-14. 참고 문서
 
 | 문서 | 용도 |

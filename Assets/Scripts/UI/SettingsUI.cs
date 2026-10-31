@@ -58,6 +58,10 @@ namespace BowlingGame
 
         [Header("Accessibility 탭")]
         [SerializeField] private Toggle audioGuideToggle;
+        [SerializeField, Tooltip("커브볼(스핀) 조작 단계 토글. ON=조준 3단계(위치→세기→회전), OFF=2단계(위치→세기, 직구).")]
+        private Toggle spinControlToggle;
+        [SerializeField, Tooltip("예상 경로 가이드 토글. ON=조준 중 공의 예상 경로를 레인 위에 선/곡선으로 표시.")]
+        private Toggle aimGuideToggle;
         [SerializeField] private TMP_Dropdown colorblindDropdown;
 
         [Header("Footer")]
@@ -235,6 +239,18 @@ namespace BowlingGame
                 audioGuideToggle.onValueChanged.AddListener(OnAudioGuideChanged);
             }
 
+            if (spinControlToggle != null)
+            {
+                spinControlToggle.isOn = _saveCache.spinControlEnabled;
+                spinControlToggle.onValueChanged.AddListener(OnSpinControlChanged);
+            }
+
+            if (aimGuideToggle != null)
+            {
+                aimGuideToggle.isOn = _saveCache.aimGuideEnabled;
+                aimGuideToggle.onValueChanged.AddListener(OnAimGuideChanged);
+            }
+
             if (colorblindDropdown != null)
             {
                 colorblindDropdown.ClearOptions();
@@ -338,6 +354,26 @@ namespace BowlingGame
             _saveCache.aimingAudioGuide = on;
             SaveSystem.Save(_saveCache);
             Debug.Log($"{LogPrefix} 조준 음향 가이드 {(on ? "ON" : "OFF")}");
+        }
+
+        // 커브볼 조작 토글 — 게임 측 반영은 PowerGaugeUI 가 AimingPower 진입 시 SaveSystem.Load 로
+        // 캐싱하는 방식이므로 여기서는 저장만 하면 된다 (다음 세기 결정 단계부터 적용).
+        private void OnSpinControlChanged(bool on)
+        {
+            if (_initializingUI) return;
+            _saveCache.spinControlEnabled = on;
+            SaveSystem.Save(_saveCache);
+            Debug.Log($"{LogPrefix} 커브볼 조작 {(on ? "ON — 조준 3단계 (위치→세기→회전)" : "OFF — 조준 2단계 (위치→세기, 직구)")}");
+        }
+
+        // 예상 경로 가이드 토글 — 게임 측 반영은 AimGuide 가 AimingPosition 진입 시 SaveSystem.Load 로
+        // 캐싱하는 방식이므로 여기서는 저장만 (다음 조준 사이클부터 적용).
+        private void OnAimGuideChanged(bool on)
+        {
+            if (_initializingUI) return;
+            _saveCache.aimGuideEnabled = on;
+            SaveSystem.Save(_saveCache);
+            Debug.Log($"{LogPrefix} 예상 경로 가이드 {(on ? "ON" : "OFF")}");
         }
 
         private void OnColorblindChanged(int idx)

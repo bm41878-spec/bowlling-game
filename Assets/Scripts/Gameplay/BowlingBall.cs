@@ -108,6 +108,30 @@ namespace BowlingGame
 
         public bool IsRolling => rb.linearVelocity.magnitude > 0.05f;
 
+        /// <summary>
+        /// 예상 경로 가이드용 — 전방으로 dz 만큼 진행했을 때의 측면(x) 오프셋을 포물선 근사로 예측한다.
+        /// 마찰/저항/curveMinForwardSpeed 컷오프는 무시하는 근사치 (가이드 용도로 충분).
+        /// 실제 커브 물리(FixedUpdate 의 측면 힘 = spin × curveStrength × 전진속도)와 상수를 공유하는 단일 출처.
+        /// </summary>
+        /// <param name="spin">실효 회전값 [-1, +1] (SpinGaugeUI.ShapeSpin 적용 후 값). 0 이면 항상 0 반환.</param>
+        /// <param name="normalizedForce">세기 게이지 정규값 [0, 1]. 커브 크기는 발사 속도에 반비례.</param>
+        /// <param name="dz">발사 지점으로부터의 전방 거리 (유닛).</param>
+        public float PredictLateralOffset(float spin, float normalizedForce, float dz)
+        {
+            if (rb == null || Mathf.Approximately(spin, 0f)) return 0f;
+
+            float mass = Mathf.Max(rb.mass, 0.0001f);
+            // ForceMode.Impulse → Δv = force / mass (Launch 와 동일 힘 산식).
+            float v = Mathf.Lerp(minForce, maxForce, normalizedForce) / mass;
+            if (v < 0.01f) return 0f;
+
+            // FixedUpdate 측면 힘 F = spin × curveStrength × v (ForceMode.Force) → 가속도 a = F / mass.
+            // 등속 전진 가정: t = dz / v → x = ½ a t².
+            float a = spin * curveStrength * v / mass;
+            float t = dz / v;
+            return 0.5f * a * t * t;
+        }
+
         public void ResetBall(Vector3 position)
         {
             // 1) 운동 상태 클리어 — 동적 일 때만. kinematic 상태에서 velocity setter 호출 시 Unity 경고.
@@ -165,10 +189,14 @@ namespace BowlingGame
         {
             isForceResetting = true;
 
-            // kinematic 으로 완전 고정
+            // 운동 상태 클리어 → kinematic 고정. ResetBall 과 동일 순서 —
+            // kinematic 전환 후 velocity setter 호출 시 Unity 경고 + 대입 무시.
+            if (!rb.isKinematic)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
             rb.isKinematic = true;
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
             transform.position = targetPosition;
             transform.rotation = Quaternion.identity;
             Physics.SyncTransforms();
