@@ -44,7 +44,7 @@ namespace BowlingGame
         private float widthStart = 0.08f;
         [SerializeField, Tooltip("선 끝 폭 (핀 쪽). 시작보다 좁혀 원근감.")]
         private float widthEnd = 0.03f;
-        [SerializeField, Tooltip("거터 판정 x 임계. BowlingBall.IsInGutter 의 0.533 과 동일하게 유지할 것.")]
+        [SerializeField, Tooltip("거터 판정 x 임계. BowlingBall.gutterX 와 동일하게 유지할 것 (레인 폭 프리셋이 양쪽에 같은 배율을 곱한다).")]
         private float gutterX = 0.533f;
 
         private GameStateManager stateManager;
@@ -53,6 +53,12 @@ namespace BowlingGame
         // AimingPosition 진입 시 SaveSystem.Load 로 1회 캐싱 — 매 프레임 I/O 방지.
         private bool guideEnabled;
         private bool isVisible;
+
+        /// <summary>
+        /// 레인 폭 프리셋 반영 — 예측선의 거터 절단 위치를 레인 폭에 맞춘다.
+        /// <see cref="LaneWidthPreset.Apply"/> 에서만 호출한다 (중복 호출 시 임계가 제곱으로 늘어남).
+        /// </summary>
+        public void ApplyWidthScale(float scale) => gutterX *= scale;
 
         void Start()
         {

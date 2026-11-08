@@ -132,7 +132,7 @@ static int       CalculateTotalScore(List<Frame> frames);
 #### `BowlingBall` (MonoBehaviour) — `Rigidbody` 필요
 - 인스펙터 필드: `minForce = 8f`, `maxForce = 18f`
 - 공개 API:
-  - `void Launch(Vector3 startPos, float normalizedForce)` — normalizedForce ∈ [0,1]
+  - `void Launch(Vector3 startPos, float normalizedForce)` — normalizedForce ∈ [0,1]. **공 물리의 유일한 인계 지점** — 조준 중 공은 kinematic 이며 이 메서드에서만 dynamic 으로 복귀한다 (위치 확정 → `Physics.SyncTransforms()` → `isKinematic=false` → velocity 클리어 → `AddForce`)
   - `void ResetBall(Vector3 position)` — **6단계 안전 리셋** (아래 참조)
   - `void ResetToStartPosition()` — Awake 캐싱된 `BallSpawnPoint` Transform 사용, 미발견 시 `FallbackSpawnPosition = (0, 0.15, 0.5)`
   - `bool IsRolling`, `bool IsInGutter` (※ IsInGutter 는 현재 호출처 없음)
@@ -144,7 +144,7 @@ static int       CalculateTotalScore(List<Frame> frames);
   3. `transform.position` / `rotation` 갱신 (kinematic 이라 안전).
   4. **`Physics.SyncTransforms()`** — Unity 6 기본값 `autoSyncTransforms = false` 환경에서 Transform → Rigidbody.position 강제 동기화. 누락 시 stale 위치에서 시뮬레이션 시작.
   5. **`rb.Sleep()`** — 누적 force / contact buffer / Interpolation 의 `previousPosition` 등 숨은 내부 상태 정리. 누락 시 매 리셋마다 잔여 상태 누적되어 y 드리프트.
-  6. `rb.isKinematic = false` 동적 복귀.
+  6. **kinematic 유지** — 동적 복귀는 하지 않는다. 공은 발사(`Launch`) 전까지 얼어 있어야 한다 (2026-11-08). 이전에는 여기서 `isKinematic = false` 로 복귀시켜, 조준 단계 내내 공이 중력 받는 자유 강체로 방치되는 버그가 있었다.
 - **씬의 Rigidbody 설정 (이름·값 변경 금지)**: `m_Interpolate: 1` (Interpolation 활성), `m_CollisionDetection: 2` (ContinuousDynamic). 위 6단계 패턴이 이 두 설정의 결합 부작용을 대처하기 위한 것이므로 함께 다뤄야 함.
 
 #### `BallAimer` (MonoBehaviour) — `BowlingBall` 과 같은 GameObject
@@ -189,9 +189,25 @@ static int       CalculateTotalScore(List<Frame> frames);
 - `ProceedToBall2`, `ProceedToNextFrame`, `GameOver`
 
 #### `CameraFollow` (MonoBehaviour)
-- 직렬화 필드: `stopPosition`, `followSmoothTime = 0.25f`, `returnSmoothTime = 0.4f`, `stopOffsetFromHeadPin = 2.4f`
+- 직렬화 필드: `stopPosition`, `followSmoothTime = 0.25f`, `returnSmoothTime = 0.4f`, `stopOffsetFromHeadPin`, `followOffsetZ`
 - `Rolling` 진입 시 공 추적, `AimingPosition` 진입 시 원위치 복귀.
-- `Pin_01` (pinId==1) 위치 기반으로 `stopPosition.z` 자동 보정.
+- `Pin_01` (pinId==1) 위치 기반으로 `stopPosition.z` 자동 보정 (`RecomputeStopZ`).
+- **`public void ApplyPreset(CameraPreset.Preset)`** — 카메라 FOV / 위치 / 피치 + 추적 거리 3종을 한 번에 적용하고 `initialPosition`·`stopPosition` 을 다시 잡는다. `Start` 가 `SaveData.cameraPreset` 을 읽어 자동 호출하므로 **씬에 직렬화된 카메라 값은 프리셋 미적용 환경의 폴백일 뿐**이다. 런타임 변경은 `CameraPreset.Apply(index)` 경유.
+
+#### `LaneWidthPreset` (static, `Assets/Scripts/Settings/`)
+- `Preset` 구조체 — `Label`, `Scale`
+- `Presets[]` — **인덱스 = `SaveData.laneWidthPreset`**. 0 = 기본(×1.0), 1 = 넓게(×1.2), 2 = 가장 넓게(×1.5)
+- `Apply(int)` — `Lane_Root` 자식들의 `localPosition.x` / `localScale.x` 와 핀의 `localPosition.x` 에 배율을 곱하고, 폭 연동 상수 3개(`BallAimer.laneHalfWidth`, `BowlingBall.gutterX`, `AimGuide.gutterX`) 를 `ApplyWidthScale` 로 동기화
+- **현재 값에 곱하는 방식이라 씬당 1회만 호출해야 한다** — 두 번 부르면 폭이 제곱이 된다. 호출 지점은 `LaneWidthSetter.Awake` 하나뿐
+
+#### `LaneWidthSetter` (MonoBehaviour, `[DefaultExecutionOrder(-100)]`)
+- `Game.unity` 의 `Lane_Root` 에 부착. Awake 에서 `LaneWidthPreset.Apply(SaveData.laneWidthPreset)` 1회 호출
+- 실행 순서가 음수인 이유 — `BallAimer` / `BowlingBall` 이 폭 연동 값을 쓰기 전에 레인이 먼저 늘어나 있어야 한다
+
+#### `CameraPreset` (static, `Assets/Scripts/Settings/`)
+- `Preset` 구조체 — `Label`, `FieldOfView`, `Position`, `PitchDegrees`, `FollowOffsetZ`, `StopOffsetFromHeadPin`, `StopHeight`
+- `Presets[]` — **인덱스 = `SaveData.cameraPreset`**. 0 = 기본(A, FOV 30), 1 = 망원 강조(B, FOV 25)
+- `Clamp(int)` / `Labels` / `Apply(int)` — `Apply` 는 로드된 씬에서 `CameraFollow` 를 찾아 적용하고, 없으면(게임 씬 미로드) 조용히 무시
 
 ### 3-5. 입력 / UI
 
@@ -605,6 +621,7 @@ pinManager.ResetAllPins()
 13. **`GameManager.Start()` 의 ModeSelector 폴백 분기 제거 금지** — `if (selector != null && selector.SelectedRule != null) ruleConfig = ...` 패턴은 `Game.unity` 단독 Play 호환과 mainmenu 경유 진입을 동시에 지원하는 단일 지점. 어느 한쪽으로만 강제하면 다른 경로가 깨진다.
 14. **`mainmenu.unity` 의 `GameModeSelector` GameObject** — DontDestroyOnLoad 의 진입점. 제거 시 모드 전달 끊김. 중복 배치도 금지 (Awake 에서 자기 자신 Destroy 처리됨).
 15. **`BowlingBall.ResetBall` 의 6단계 순서** — `Physics.SyncTransforms()` / `rb.Sleep()` 누락 시 스트라이크/스페어 후 y 드리프트 회귀. Unity 6 의 `autoSyncTransforms=false` + Interpolation + ContinuousDynamic CCD 결합에서 발생하는 stale Rigidbody.position / 누적 internal state 문제를 대처. 자세한 진단은 `SESSION_2026-06-05.md` §2 참조.
+15-a. **공 물리 소유권 — `Rolling` 이전의 모든 상태에서 공은 kinematic** (2026-11-08 추가). `dynamic` 복귀는 `BowlingBall.Launch` **한 곳에서만** 수행한다. `ResetBall` / `ForceResetCoroutine` / `BallAimer` 어디에서도 `isKinematic = false` 를 다시 넣지 말 것 — 조준 단계(AimingPower/AimingSpin) 동안 공이 중력·접촉 해소로 스스로 움직이던 버그의 원인이다. `BallAimer` 는 `transform.position` 만 쓰고, AimingPosition 진입 시의 kinematic 고정만 방어적으로 유지한다.
 16. **공 위치 리셋 경로 단일화** — 현재 `GameManager.BeginGame` 과 `ThrowTransitionController.HandlePostThrow` 두 곳만 `ball.ResetToStartPosition()` 호출. `BowlingBall.HandleStateChanged` 의 AimingPosition 분기에 리셋 로직 다시 넣지 말 것 (이중 호출 → §4-1 시퀀스 깨짐).
 17. **`AudioManager` 의 `[SerializeField]` 필드명** (`audioMixer`, `sfxGroup`, `bgmGroup`, `sfxSource`, `rollSource`, `pinHitClip`, `strikeClip`, `gutterClip`, `ballRollClip`) — 변경 시 `mainmenu.unity` 의 와이어링이 끊김.
 18. **AudioMixer `MainMixer.mixer` 의 Exposed Parameter 이름** (`MasterVolume`, `SFXVolume`, `BGMVolume`) — `AudioManager.cs` 의 상수와 동기화되어 있어 한쪽만 변경 시 `SetFloat` 가 조용히 실패하여 음량 조절 불가.
@@ -619,6 +636,12 @@ pinManager.ResetAllPins()
 27. **`SettingsUI` 의 Display 탭 SerializeField 이름** (`resolutionDropdown`, `windowModeDropdown`, `uiScaleSlider`, `uiScaleValueLabel`) — 변경 시 `settings.unity` 의 Row_Resolution / Row_WindowMode / Row_UIScale 와이어링이 끊김.
 28. **`SettingsApplier.OnSceneLoaded` 의 sceneLoaded 후크** — 씬 전이마다 UI 스케일을 새 씬의 CanvasScaler 에 재적용. 제거 시 Game 씬 진입 후 점수판 캔버스가 기준 1920×1080 으로 돌아가 사용자 설정이 휘발됨. `LoadSceneMode.Single` 분기 유지 (additive 로드 제외).
 29. **모든 씬 Canvas 의 CanvasScaler 통일 규칙** (§11-5) — `ScaleWithScreenSize 1920×1080 match=0.5`. 새 씬 추가 시 또는 기존 Canvas 수정 시 이 4개 값을 어기지 말 것. `ConstantPixelSize` 모드는 빌드 시 해상도마다 UI 가 다르게 보이고 `DisplaySetter.ApplyUIScale` 가 무시한다. 2026-06-24 Gameover_scene 의 ConstantPixelSize 800×600 으로 인한 UI 겹침 사례가 단일 출처 위반의 대표 사례.
+
+30. **`CameraPreset.Presets` 의 거리 4종은 한 묶음** — `Position.z` / `FollowOffsetZ` / `StopOffsetFromHeadPin` / `StopHeight` 는 해당 프리셋의 `FieldOfView` 와 짝이다. FOV 만 바꾸면 조준 시점은 그럴듯해도 **투구 중 핀이 화면을 꽉 채우거나 반대로 멀어진다.** 배율 = `tan(기준FOV/2) / tan(새FOV/2)` 로 거리들을 함께 재계산할 것. 또한 `Presets` 배열 **순서 변경·중간 삽입 금지** — 인덱스가 `SaveData.cameraPreset` 에 그대로 저장되어 있어 기존 save.json 의 선택이 어긋난다. 추가는 반드시 끝에 append.
+
+31. **레인 폭은 `Lane_Root` 의 `localScale` 로 바꾸지 말 것** — 부모를 x 축으로만 비균등 스케일하면 그 아래에서 회전하는 강체(쓰러지는 핀) 가 찌그러진다. `LaneWidthPreset.Apply` 처럼 자식들의 `localPosition.x` / `localScale.x` 를 개별로 곱하고, 핀은 **위치만** 벌릴 것 (핀의 `localScale` 은 건드리지 않는다).
+32. **폭 연동 상수 3개는 한 묶음** — `BallAimer.laneHalfWidth`(0.43), `BowlingBall.gutterX`(0.533), `AimGuide.gutterX`(0.533). 레인 폭을 바꾸면 셋 다 같은 배율을 받아야 한다. 하나라도 빠지면 조준 왕복 범위가 레인을 벗어나거나, 거터 판정이 실제 거터와 어긋나거나, 예상 경로선이 엉뚱한 곳에서 잘린다.
+33. **`LaneWidthPreset.Apply` 의 호출 지점을 늘리지 말 것** — 현재 좌표에 배율을 곱하는 방식이라 멱등하지 않다. 유일한 호출자는 `LaneWidthSetter.Awake` 이며, 설정 UI 는 **저장만** 하고 적용하지 않는다 (투구 중 레인이 넓어지면 공·핀이 순간이동).
 
 ---
 

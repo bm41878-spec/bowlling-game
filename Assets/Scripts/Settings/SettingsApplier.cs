@@ -67,6 +67,7 @@ namespace BowlingGame
             ApplyInput(save);
             ApplyDisplay(save);
             ApplyAccessibility(save);
+            ApplyCamera(save);
         }
 
         // ---------- 카테고리별 적용 ----------
@@ -107,6 +108,14 @@ namespace BowlingGame
         private void ApplyAccessibility(SaveData save)
         {
             // 자리 표시 — 향후 색맹 모드 실제 적용 시 ColorblindFilter.Apply(save.colorblindMode) 등 호출.
+        }
+
+        // 카메라 시점 프리셋 — 게임 씬이 로드돼 있을 때만 대상이 있다.
+        // 게임 씬 진입 시의 최초 적용은 CameraFollow.Start 가 스스로 수행하므로,
+        // 여기서는 설정 변경 직후(인게임 ESC 오버레이 포함) 의 즉시 반영만 담당한다.
+        private void ApplyCamera(SaveData save)
+        {
+            CameraPreset.Apply(save.cameraPreset);
         }
     }
 }

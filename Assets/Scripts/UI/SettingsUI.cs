@@ -17,7 +17,7 @@ namespace BowlingGame
     ///   <item>1 — Display (placeholder)</item>
     ///   <item>2 — Controls (placeholder)</item>
     ///   <item>3 — Accessibility (placeholder)</item>
-    ///   <item>4 — UX (placeholder)</item>
+    ///   <item>4 — 기타 (카메라 시점 프리셋. 씬의 GameObject 이름은 역사적 이유로 Tab_UX / UXPanel)</item>
     /// </list>
     /// 값 변경 흐름: 슬라이더/토글 입력 → SaveData 캐시 갱신 → AudioManager 즉시 반영 → SaveSystem.Save.
     /// 표시 로직 인라인 금지 (AI_PROMPT_REFERENCE.md §7-12) — 핸들러는 모델 갱신과 시스템 호출만, 표시 갱신은 RefreshAudioLabels 헬퍼로 분리.
@@ -26,7 +26,7 @@ namespace BowlingGame
     {
         private const string LogPrefix = "[Settings]";
 
-        [Header("탭 패널 — [0]=Audio, [1]=Display, [2]=Controls, [3]=Accessibility, [4]=UX")]
+        [Header("탭 패널 — [0]=Audio, [1]=Display, [2]=Controls, [3]=Accessibility, [4]=기타")]
         [SerializeField] private GameObject[] tabPanels;
         [SerializeField] private Button[] tabButtons;
         [SerializeField] private int defaultTab = 0;
@@ -64,6 +64,12 @@ namespace BowlingGame
         private Toggle aimGuideToggle;
         [SerializeField] private TMP_Dropdown colorblindDropdown;
 
+        [Header("기타 탭")]
+        [SerializeField, Tooltip("게임 씬 카메라의 원근 압축 프리셋. 항목·값은 CameraPreset.Presets 가 단일 출처.")]
+        private TMP_Dropdown cameraPresetDropdown;
+        [SerializeField, Tooltip("레인 가로 폭 프리셋. 항목·배율은 LaneWidthPreset.Presets 가 단일 출처. 적용은 다음 게임부터.")]
+        private TMP_Dropdown laneWidthDropdown;
+
         [Header("Footer")]
         [SerializeField] private Button backToMainMenuButton;
         [SerializeField] private Button backButton;
@@ -100,6 +106,7 @@ namespace BowlingGame
             BindDisplayTab();
             BindControlsTab();
             BindAccessibilityTab();
+            BindMiscTab();
             _initializingUI = false;
 
             BindTabs();
@@ -263,6 +270,27 @@ namespace BowlingGame
             }
         }
 
+        private void BindMiscTab()
+        {
+            if (cameraPresetDropdown == null) return;
+
+            cameraPresetDropdown.ClearOptions();
+            // 인덱스 = SaveData.cameraPreset — 목록 순서는 CameraPreset.Presets 와 1:1.
+            cameraPresetDropdown.AddOptions(new List<string>(CameraPreset.Labels));
+            cameraPresetDropdown.SetValueWithoutNotify(CameraPreset.Clamp(_saveCache.cameraPreset));
+            cameraPresetDropdown.RefreshShownValue();
+            cameraPresetDropdown.onValueChanged.AddListener(OnCameraPresetChanged);
+
+            if (laneWidthDropdown == null) return;
+
+            laneWidthDropdown.ClearOptions();
+            // 인덱스 = SaveData.laneWidthPreset — 목록 순서는 LaneWidthPreset.Presets 와 1:1.
+            laneWidthDropdown.AddOptions(new List<string>(LaneWidthPreset.Labels));
+            laneWidthDropdown.SetValueWithoutNotify(LaneWidthPreset.Clamp(_saveCache.laneWidthPreset));
+            laneWidthDropdown.RefreshShownValue();
+            laneWidthDropdown.onValueChanged.AddListener(OnLaneWidthChanged);
+        }
+
         // ---------- 탭 전환 ----------
 
         private void ActivateTab(int idx)
@@ -383,6 +411,30 @@ namespace BowlingGame
             SaveSystem.Save(_saveCache);
             // 실제 셰이더/머티리얼 보정은 추후 업데이트 — 현재는 선택값 저장만.
             Debug.Log($"{LogPrefix} 색맹 모드 = {_saveCache.colorblindMode} (실제 적용은 추후 업데이트)");
+        }
+
+        // ---------- 기타 핸들러 ----------
+
+        // 카메라 시점 프리셋 — 저장 후 즉시 적용한다. 게임 씬이 로드돼 있지 않으면
+        // CameraPreset.Apply 가 조용히 무시하고, 다음 게임 씬 진입 시 CameraFollow.Start 가 반영한다.
+        private void OnCameraPresetChanged(int idx)
+        {
+            if (_initializingUI) return;
+            _saveCache.cameraPreset = CameraPreset.Clamp(idx);
+            SaveSystem.Save(_saveCache);
+            CameraPreset.Apply(_saveCache.cameraPreset);
+            Debug.Log($"{LogPrefix} 카메라 시점 = {CameraPreset.Presets[_saveCache.cameraPreset].Label}");
+        }
+
+        // 레인 가로 폭 프리셋 — 저장만 하고 즉시 적용하지 않는다.
+        // 투구 중 레인이 넓어지면 굴러가던 공과 쓰러지던 핀이 순간이동하므로,
+        // 적용은 다음 게임 씬 로드 시 LaneWidthSetter.Awake 가 한 번만 수행한다.
+        private void OnLaneWidthChanged(int idx)
+        {
+            if (_initializingUI) return;
+            _saveCache.laneWidthPreset = LaneWidthPreset.Clamp(idx);
+            SaveSystem.Save(_saveCache);
+            Debug.Log($"{LogPrefix} 레인 폭 = {LaneWidthPreset.Presets[_saveCache.laneWidthPreset].Label} (다음 게임부터 적용)");
         }
 
         // ---------- 헬퍼 ----------

@@ -13,7 +13,7 @@ namespace BowlingGame
         public event Action OnFirstPinContact;
 
         /// <summary>
-        /// 현재 투구에서 공이 처음 거터 영역(|x| &gt; 0.533)에 진입하는 순간 1회 발화하는 <b>저수준 즉시 신호</b>.
+        /// 현재 투구에서 공이 처음 거터 영역(|x| &gt; gutterX)에 진입하는 순간 1회 발화하는 <b>저수준 즉시 신호</b>.
         /// Rolling 상태에서만 폴링하며, ResetBall() 에서 플래그가 리셋된다.
         /// 거터 '판정'(거터 진입 + 0핀 동시 충족)은 <see cref="ThrowTransitionController"/> 가
         /// <see cref="EnteredGutterThisThrow"/> 와 쓰러진 핀 수를 결합해 내린다(OnGutterBall).
@@ -27,6 +27,9 @@ namespace BowlingGame
 
         [Tooltip("이 전진속도(z) 미만이면 커브 적용 중단 — 거의 멈춘 공이 옆으로 미끄러지는 현상 방지.")]
         [SerializeField] float curveMinForwardSpeed = 0.2f;
+
+        [Tooltip("거터 진입 판정 x 임계 (레인 절반 폭 + 약간의 여유). 레인 폭 프리셋이 배율을 곱한다 — AimGuide.gutterX 와 항상 같은 값이어야 한다.")]
+        [SerializeField] float gutterX = 0.533f;
 
         // BallSpawnPoint 의 시작 위치 미발견 시 사용하는 fallback. Awake 에서 한 번 캐싱하여
         // 매 리셋마다 GameObject.Find 호출을 피한다.
@@ -89,7 +92,6 @@ namespace BowlingGame
             hasLaunched = true;
 
             Vector3 launchPos = ballAimer.ConfirmedPosition;
-            transform.position = launchPos;
 
             float force = powerGauge.ConfirmedNormalized;
             confirmedSpin = spinGauge != null ? spinGauge.ConfirmedSpin : 0f;
@@ -99,9 +101,26 @@ namespace BowlingGame
             // Scoring 전이는 GameManager 가 PhysicsSettleDetector.OnSettled 를 받아 처리한다.
         }
 
+        /// <summary>
+        /// 공을 <paramref name="startPos"/> 에 놓고 전방으로 발사한다.
+        /// 조준 중 공은 kinematic 으로 얼려 두므로(ResetBall 6단계) <b>이 메서드가 유일한 물리 인계 지점</b>이다.
+        /// 순서를 지킬 것 — 위치 확정 → SyncTransforms → dynamic 복귀 → 운동 상태 클리어 → 힘 적용.
+        /// </summary>
         public void Launch(Vector3 startPos, float normalizedForce)
         {
+            // 1) 아직 kinematic 인 동안 위치 확정. 조준 중 BallAimer 가 transform 에 직접 대입한
+            //    위치를 물리 엔진에 반영한다 — Unity 6 의 autoSyncTransforms=false 환경에서
+            //    이 호출이 없으면 stale 한 Rigidbody.position 에서 시뮬레이션이 시작된다.
             transform.position = startPos;
+            Physics.SyncTransforms();
+
+            // 2) 물리 인계 — 발사 순간에만 dynamic 으로 복귀.
+            rb.isKinematic = false;
+
+            // 3) 조준 단계의 잔여 운동 상태 제거 — 항상 정지 상태에서 출발.
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+
             float force = Mathf.Lerp(minForce, maxForce, normalizedForce);
             rb.AddForce(Vector3.forward * force, ForceMode.Impulse);
         }
@@ -157,8 +176,10 @@ namespace BowlingGame
             //    이전 버전의 y 드리프트 회귀 원인 — Sleep() 누락으로 잔여 상태가 매 리셋마다 누적됨.
             rb.Sleep();
 
-            // 6) 동적 복귀 — 깨끗한 상태로 시뮬레이션 재개.
-            rb.isKinematic = false;
+            // 6) kinematic 유지 — 발사 전까지 공을 얼려 둔다.
+            //    이전에는 여기서 dynamic 으로 복귀시켰고, 그 결과 조준 단계(AimingPower/AimingSpin)
+            //    내내 공이 중력 받는 자유 강체로 방치되어 게이지를 재는 동안 스스로 움직였다.
+            //    물리 복귀는 Launch() 한 곳에서만 수행한다 (물리 소유권 단일화).
             hasLaunched = false;
 
             // 사운드/이펙트 1회 발화 플래그 리셋 — 다음 투구에서 재발화 가능 (조건 3: 리스폰 시 재생 가능).
@@ -212,8 +233,10 @@ namespace BowlingGame
             Physics.SyncTransforms();
             rb.Sleep();
 
-            // dynamic 복귀
-            rb.isKinematic = false;
+            // kinematic 유지 — 복귀는 Launch() 에서만.
+            // 이전에는 여기서 dynamic 으로 되돌렸는데, 이 코루틴은 yield 로 프레임을 넘기므로
+            // 그 사이 AimingPosition 에 진입했다면 BallAimer 가 건 kinematic 고정을 덮어썼다.
+            // 조준 중 공이 간헐적으로 움직이던 원인.
             hasLaunched = false;
             isForceResetting = false;
 
@@ -265,9 +288,15 @@ namespace BowlingGame
             StartCoroutine(ForceResetCoroutine(resetPos));
         }
 
-        // 거터 진입 판정 — |x| > 0.533 (레인 절반 폭 + 약간의 여유).
+        // 거터 진입 판정 — |x| > gutterX (레인 절반 폭 + 약간의 여유, 레인 폭 프리셋에 연동).
         // 효과음 후크는 OnEnteredGutter 이벤트(아래 Update 폴링) 로 노출되며, 점수 시스템 연계는 추후 Phase.
-        public bool IsInGutter => Mathf.Abs(transform.position.x) > 0.533f;
+        public bool IsInGutter => Mathf.Abs(transform.position.x) > gutterX;
+
+        /// <summary>
+        /// 레인 폭 프리셋 반영 — 거터 임계를 레인 폭에 맞춘다.
+        /// <see cref="LaneWidthPreset.Apply"/> 에서만 호출한다 (중복 호출 시 임계가 제곱으로 늘어남).
+        /// </summary>
+        public void ApplyWidthScale(float scale) => gutterX *= scale;
 
         /// <summary>
         /// 이번 투구에서 공이 거터 영역에 진입한 적이 있는지. <see cref="ResetBall"/> 에서 리셋된다.

@@ -812,6 +812,129 @@ M  ProjectSettings/EditorBuildSettings.asset
 
 **잔여 (선택)**: `lineMaterial` 미배선 — Sprites/Default 런타임 폴백으로 동작하나 빌드 셰이더 스트리핑 가능성. Editor 에서 `Assets/Materials/Mat_AimGuide.mat` (URP/Unlit) 생성 후 BowlingBall 의 AimGuide → Line Material 에 할당 권장.
 
+### 14-20. 후속 세션 변경 (2026-11-08) — WebGL 릴리즈 빌드 + 배포 준비
+
+**동기**: 다른 사람에게 테스트를 보내기 위한 배포용 빌드. 개발 빌드(128.86 MB)는 압축이 꺼져 있어 전달용으로 부적합.
+
+| 항목 | 내용 |
+|---|---|
+| `ProjectSettings` | `webGLDecompressionFallback: 0 → 1`. Brotli 압축(`webGLCompressionFormat: 0`)은 유지하되, 호스트가 `Content-Encoding: br` 헤더를 보내주지 않아도 로더가 JS 로 풀도록 폴백 활성화. 산출물 확장자가 `.br` 대신 `.unityweb` 로 나오는 것이 적용 확인 신호. 꺼져 있으면 일반 정적 호스트(GitHub Pages 등)에서 로딩 실패 |
+| 개발 빌드 | `Build/WebGL` — 530초, 128.86 MB (wasm 115 MB). 로컬 검증용 |
+| 릴리즈 빌드 | `Build/WebGL_Release` — 631초, **16.51 MB** (wasm 9.3 MB + data 7.8 MB). 에러 0 / 경고 14 (URP 셰이더 스트리핑 정보성) |
+| 배포 ZIP | `Build/bowling-demo-webgl-v2.zip` (16.18 MB, `index.html` 루트). itch.io 업로드용 |
+| itch.io | `baemin.itch.io/bowling-champion` (Restricted). Kind of project = HTML, Viewport 960×600, Embed in page |
+
+**검증**: 로컬 정적 서버(`.claude/launch.json` 의 `webgl-release-preview`, 포트 8086)에서 타이틀 → 메인메뉴 전이 + 키 입력 + 한글 렌더 정상. 포트 8080 은 UnityMCP HTTP 브리지가 점유하므로 피할 것.
+
+**WebGL 콘솔 경고 (무해)**: `Hidden/CoreSRP/CoreCopy`, `StencilDitherMaskSeed`, `HDRDebugView` 미지원 — URP 내부 디버그 셰이더. 단 `Edge Adaptive Spatial Upsampling`(FSR) 미지원으로 PostProcessing 패스는 웹에서 실행되지 않는다.
+
+**미해결**: `Game.unity` 의 `Text_PowerValue` TMP 폰트 에셋 GUID(`8f586378b4e144a9851e7b34d9b748ee`)가 프로젝트에 존재하지 않아 "Please assign a Font Asset" 경고가 매 프레임 발생하고 세기 퍼센트 숫자가 표시되지 않는다. 같은 씬의 나머지 TMP 6개는 `NotoSansKR-Black SDF`(`03a93201f9cd0c44dae80af8eea9c5fa`) 사용. WebGL 전용이 아니라 Win64 빌드에도 동일.
+
+### 14-21. 후속 세션 변경 (2026-11-08) — 조준 중 공이 스스로 움직이는 버그 수정
+
+**증상**: 프레임별로 투구를 준비하는 동안 볼링공이 간헐적으로 스스로 움직임.
+
+**원인 (2가지가 겹침)**:
+
+1. **상시 원인** — `BallAimer.HandleStateChanged` 가 `prev == AimingPosition` 에서 `isKinematic = false` 를 실행했다. 위치를 확정하는 순간 공이 dynamic 으로 돌아가, 세기(`AimingPower`)·커브(`AimingSpin`) 게이지를 재는 수 초 동안 공이 중력 받는 자유 강체로 방치됐다. 그 구간에서 침투 해소·접촉 정리·중력 낙하가 일어나며 공이 미끄러졌다.
+2. **간헐성의 정체** — `BowlingBall.ForceResetCoroutine` 꼬리의 `isKinematic = false` 가 무조건 실행됐다. 이 코루틴은 `yield return null` 로 프레임을 넘기므로, 그 사이 `AimingPosition` 에 진입했다면 `BallAimer` 가 건 kinematic 고정을 덮어썼다. 리셋 위치 검증 실패 자체가 드물어 증상이 "간혹" 나타난 이유.
+
+`PROJECT_REVIEW_2026-07-09.md` §2-2 P2 가 예측한 "두 스크립트가 같은 rb 의 isKinematic 을 각자 토글 → 전이 순서가 바뀌면 서로를 덮어씀" 이 실제 버그로 발현한 사례다.
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Gameplay/BowlingBall.cs` | `ResetBall` 6단계의 **동적 복귀 제거** — 리셋 후 kinematic 유지. `ForceResetCoroutine` 꼬리도 동일. `Launch(Vector3, float)` 를 **유일한 물리 인계 지점**으로 재정의: 위치 확정 → `Physics.SyncTransforms()` → `isKinematic = false` → velocity/angularVelocity 클리어 → `AddForce`. `ExecuteLaunch` 의 중복 위치 대입 1줄 제거 |
+| `Assets/Scripts/Gameplay/BallAimer.cs` | `prev == AimingPosition` 블록의 `isKinematic = false` 제거. AimingPosition 진입 시의 kinematic 고정은 방어적으로 유지 |
+
+**새 불변식**: **`Rolling` 이전의 모든 상태에서 공은 kinematic.** → `AI_PROMPT_REFERENCE.md` §7-15-a 등재.
+
+`Physics.SyncTransforms()` 를 `Launch` 에 넣은 이유: `BallAimer` 가 조준 내내 `transform.position` 에 직접 대입하는데, Unity 6 의 `autoSyncTransforms = false` 환경에서 그대로 dynamic 으로 복귀하면 stale 한 `Rigidbody.position` 에서 시뮬레이션이 시작된다 (§7-15 의 y 드리프트와 같은 뿌리).
+
+**검증**: 스크립트 컴파일 통과 (에러 0). **Play 모드 실동작 검증은 미실시** — 사용자 확인 필요.
+
+**미착수**: 물리 소유권을 한 클래스로 모으는 리팩토링(`BallMotor` 분리, 리뷰 §2-2 P2 권장)은 범위가 커서 보류.
+
+### 14-22. 후속 세션 변경 (2026-11-08) — 카메라 원근 압축 (망원 시점)
+
+**동기**: 레인 끝의 핀이 소실점 근처로 밀려 너무 멀어 보임. F1 중계 카메라처럼 원근(근경/원경 크기 차이)을 압축해 달라는 요구.
+
+**원리**: FOV 를 좁히면(망원) 피사체가 확대되지만 근경/원경 **비율**은 그대로다. 비율을 바꾸는 것은 **카메라 거리**뿐이다. 따라서 둘을 같이 움직인다 — 카메라를 뒤로 빼서 원근을 압축하고, 좁아진 거리감을 FOV 축소로 되돌린다.
+
+| 대상 | 변경 |
+|---|---|
+| `Game.unity` Main Camera | `field of view: 60 → 30`, 위치 `(0, 1.4, -1.2) → (0, 2.1, -3.2)`, 피치 `12° → 18.5°` |
+| `Game.unity` CameraFollow | `stopOffsetFromHeadPin: 2.4 → 5.17`, `stopPosition: (0, 1.7, 12) → (0, 2.4, 12)` |
+| `CameraFollow.cs` | `FollowOffsetZ` 상수 `1.7f → 3.66f` |
+
+**배율 산정**: 거리 스케일 = `tan(60/2) / tan(30/2)` = **2.155**. 조준 위치·추적 오프셋·정지 오프셋을 모두 이 배율로 늘려야 피사체 크기가 유지된다. **FOV 를 다시 바꾸면 이 3개 값도 같은 배율로 재계산할 것** — 하나만 바꾸면 투구 중 핀이 화면을 꽉 채우거나 반대로 멀어진다.
+
+**결과**: 핀 겉보기 크기 약 1.8배, 근경/원경 크기비 0.22 → 0.36. 카메라를 높인 것(1.4 → 2.1)은 망원에서 레인이 화면 중앙의 얇은 띠로 납작해지는 것을 보정하기 위함.
+
+**대안 (미적용)**: FOV 25 / 위치 `(0, 2.6, -4.85)` / 피치 17.4° — 압축이 더 강하지만(크기비 0.44) 레인이 평면처럼 보이고 시점이 더 내려다보는 느낌. 스크린샷 `Assets/Screenshots/cam_try_B.png`.
+
+**부수 변경**: 씬 저장 시 Unity 가 2026-07-09 세션에 YAML 직접 편집으로 만든 `AimGuide` 블록과 `GameManager` 블록을 정규화했다 (`m_Name:` trailing space, 누락돼 있던 `gameOverAnnouncementMaxWait: 5` 추가). 의도한 변경은 아니지만 직렬화가 정상화된 것이라 되돌릴 필요 없음.
+
+**검증**: 에디터 Game 뷰 스크린샷 — 조준 시점 + 추적 정지 시점 모두 확인. **Play 모드 실동작 검증은 미실시.**
+
+### 14-23. 후속 세션 변경 (2026-11-08) — 카메라 시점 프리셋을 설정 "기타" 탭으로
+
+**동기**: §14-22 에서 적용한 A안 외에 B안(망원 강조)도 고를 수 있게 해 달라는 요구. 설정의 "기타" 탭에서 전환.
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Settings/CameraPreset.cs` | **신규.** `Preset` 구조체(FOV·위치·피치·추적거리 3종) + `Presets[]` 배열 + `Clamp` / `Labels` / `Apply(int)`. 카메라 시점 값의 **단일 출처** |
+| `Assets/Scripts/Persistence/SaveData.cs` | `cameraPreset` (int, 기본 0=A) 추가. int 기본값이 기본 프리셋과 일치해 마이그레이션 보정 불필요 |
+| `Assets/Scripts/Gameplay/CameraFollow.cs` | `FollowOffsetZ` const → `followOffsetZ` 직렬화 필드 (프리셋마다 달라야 함). `ApplyPreset(Preset)` 공개 메서드 추가 — FOV·위치·피치·추적거리를 적용하고 `initialPosition`·`stopPosition` 재계산. `Start` 가 저장값을 읽어 자동 적용. 헤드핀 기준 정지 Z 계산을 `RecomputeStopZ()` 로 분리 |
+| `Assets/Scripts/Settings/SettingsApplier.cs` | `RefreshFromSave` 에 `ApplyCamera(save)` 추가 — 설정 변경 직후 즉시 반영 담당 (최초 적용은 `CameraFollow.Start` 몫) |
+| `Assets/Scripts/UI/SettingsUI.cs` | `cameraPresetDropdown` SerializeField + `BindMiscTab()` + `OnCameraPresetChanged(int)`. 드롭다운 항목은 `CameraPreset.Labels` 에서 가져와 코드와 씬이 어긋날 수 없게 함 |
+| `Assets/Scenes/settings.unity` | 비어 있던 `UXPanel`(탭 인덱스 4) 을 "기타" 탭으로 전환. `AccessibilityPanel` 과 동일한 VerticalLayoutGroup 부여 + `Row_WindowMode` 복제해 `Row_CameraPreset` 생성 (Label "카메라 시점" + TMP_Dropdown). 기존 `Placeholder` 는 설명문으로 전환. `SettingsUI.cameraPresetDropdown` 배선 |
+
+**프리셋 값**
+
+| | A — 기본 | B — 망원 강조 |
+|---|---|---|
+| FOV | 30 | 25 |
+| 조준 위치 | (0, 2.1, −3.2) | (0, 2.6, −4.85) |
+| 피치 | 18.5° | 17.4° |
+| `FollowOffsetZ` | 3.66 | 4.43 |
+| `StopOffsetFromHeadPin` | 5.17 | 6.25 |
+| `StopHeight` | 2.4 | 3.0 |
+| 근경/원경 크기비 | 0.36 | 0.44 |
+
+**적용 시점**: 게임 씬 진입 시 `CameraFollow.Start` 가 저장값을 읽어 적용. 설정에서 바꾸면 `CameraPreset.Apply` 가 즉시 반영하며, 게임 씬이 로드돼 있지 않으면(설정/메인메뉴 단독) 조용히 무시하고 다음 게임 진입 때 반영된다.
+
+**씬 GameObject 이름 주의**: "기타" 탭의 실제 오브젝트 이름은 역사적 이유로 `Tab_UX` / `UXPanel` 이다 (기존 placeholder 를 재사용). `SettingsUI.tabPanels[4]` / `tabButtons[4]` 배선이 이미 있어 탭 추가 작업은 불필요했다.
+
+**기존 UI 결함 (이번 변경과 무관)**: 설정 드롭다운들의 선택값 텍스트가 14pt 로, 행 라벨 36pt 대비 지나치게 작다. 복제한 `Row_CameraPreset` 도 원본 `Row_WindowMode` 와 동일한 14pt — 즉 디스플레이 탭부터 같은 문제가 있다. 일괄 조정 필요.
+
+**검증**: 컴파일 에러 0. 에디터에서 "기타" 탭 렌더 확인 (`Assets/Screenshots/settings_misc_tab-1.png`). **Play 모드 실동작 검증은 미실시.**
+
+### 14-24. 후속 세션 변경 (2026-11-08) — 레인 가로 폭 프리셋 (A/B/C)
+
+**동기**: 레인 가로 폭을 기본 / ×1.2 / ×1.5 세 가지로 고를 수 있게. 설정 "기타" 탭에서 선택하되, **진행 중인 게임에는 적용하지 않고 다음 게임부터** 반영.
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Settings/LaneWidthPreset.cs` | **신규.** `Presets[]` (A ×1.0 / B ×1.2 / C ×1.5) + `Apply(int)`. 레인 폭 값의 단일 출처 |
+| `Assets/Scripts/Gameplay/LaneWidthSetter.cs` | **신규.** `[DefaultExecutionOrder(-100)]`, `Lane_Root` 부착. Awake 에서 저장값을 1회 적용 |
+| `Assets/Scripts/Persistence/SaveData.cs` | `laneWidthPreset` (int, 기본 0=A) 추가 |
+| `Assets/Scripts/Gameplay/BallAimer.cs` | `ApplyWidthScale(float)` 추가 — `laneHalfWidth` 에 배율 적용 |
+| `Assets/Scripts/Gameplay/BowlingBall.cs` | 하드코딩돼 있던 거터 임계 `0.533f` 를 `[SerializeField] gutterX` 로 승격 + `ApplyWidthScale(float)` |
+| `Assets/Scripts/Gameplay/AimGuide.cs` | `ApplyWidthScale(float)` 추가 — `gutterX` 에 배율 적용 |
+| `Assets/Scripts/UI/SettingsUI.cs` | `laneWidthDropdown` + 바인딩 + `OnLaneWidthChanged(int)` — **저장만 하고 적용하지 않는다** |
+| `Assets/Scenes/Game.unity` | `Lane_Root` 에 `LaneWidthSetter` 부착 |
+| `Assets/Scenes/settings.unity` | "기타" 탭에 `Row_LaneWidth` 추가 (Label "레인 폭" + TMP_Dropdown), `SettingsUI.laneWidthDropdown` 배선. 설명문 갱신 |
+
+**구현 방식 — 부모 스케일을 쓰지 않는 이유**: `Lane_Root.localScale.x` 를 늘리면 한 줄로 끝나지만, x 축만 비균등 스케일된 부모 아래에서 **회전하는 강체(쓰러지는 핀)가 찌그러진다.** 그래서 `Lane_Root` 자식들의 `localPosition.x` / `localScale.x` 를 개별로 곱하고, 핀은 `localPosition.x` 만 벌린다 (핀의 `localScale` 은 유지 → 핀 굵기 그대로).
+
+**폭 연동 상수 3개**: `BallAimer.laneHalfWidth`(0.43), `BowlingBall.gutterX`(0.533), `AimGuide.gutterX`(0.533). 레인 폭을 바꾸면 셋 다 같은 배율을 받아야 한다 — 하나라도 빠지면 조준 범위가 레인을 벗어나거나 거터 판정이 어긋난다.
+
+**멱등하지 않음**: `Apply` 는 현재 좌표에 배율을 곱한다. 씬이 로드될 때마다 저작 원본 값에서 출발하므로 누적되지 않지만, **같은 씬에서 두 번 호출하면 폭이 제곱이 된다.** 호출자는 `LaneWidthSetter.Awake` 하나뿐이어야 한다.
+
+**검증 (에디터)**: ×1.2 / ×1.5 적용 시 거터·벽·핀 간격이 정확히 배율만큼 이동하고 핀 `localScale` 은 (9,9,9) 유지 확인. 스크린샷 `Assets/Screenshots/lane_width_B_1.2x.png`, `lane_width_C_1.5x.png`. 확인 후 씬은 원본 값으로 복원·저장.
+
+**부수 변경 (요청 범위 밖, 의도적)**: 설정 드롭다운 5개(해상도·창모드·색맹·카메라 시점·레인 폭) 의 선택값/항목 글자 크기를 **14pt → 28pt** 로 올렸다. 행 라벨이 36pt 인데 선택값이 14pt 라 무엇이 선택됐는지 읽기 어려웠다. 새로 만든 두 행만 키우면 기존 탭과 어긋나므로 전부 통일했다.
+
 ### 14-14. 참고 문서
 
 | 문서 | 용도 |

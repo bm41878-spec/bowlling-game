@@ -59,5 +59,16 @@ namespace BowlingGame
         // AimingPosition/AimingPower 는 직선, AimingSpin 은 실시간 곡선 미리보기. AimGuide 컴포넌트가
         // AimingPosition 진입 시점에 캐싱해 사용. bool 기본값 false — 마이그레이션 보정 불필요.
         public bool aimGuideEnabled = false;
+
+        // cameraPreset: 게임 씬 카메라의 원근 압축 프리셋 인덱스 (2026-11-08 추가).
+        // 0 = 기본(A), 1 = 망원 강조(B). 값·배율은 CameraPreset.Presets 가 단일 출처.
+        // int 기본값 0 이 "기본 프리셋" 과 일치하므로 마이그레이션 보정 불필요.
+        public int cameraPreset = 0;
+
+        // laneWidthPreset: 레인 가로 폭 프리셋 인덱스 (2026-11-08 추가).
+        // 0 = 기본(A, ×1.0), 1 = 넓게(B, ×1.2), 2 = 가장 넓게(C, ×1.5). 배율은 LaneWidthPreset.Presets 가 단일 출처.
+        // 적용은 게임 씬 로드 시 1회뿐 — 진행 중인 게임에는 반영하지 않는다 (굴러가던 공/핀이 순간이동하므로).
+        // int 기본값 0 이 기본 프리셋과 일치하므로 마이그레이션 보정 불필요.
+        public int laneWidthPreset = 0;
     }
 }

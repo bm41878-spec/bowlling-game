@@ -31,6 +31,12 @@ namespace BowlingGame
 
         public Vector3 ConfirmedPosition => confirmedPosition;
 
+        /// <summary>
+        /// 레인 폭 프리셋 반영 — 조준 왕복 범위를 레인 폭에 맞춘다.
+        /// <see cref="LaneWidthPreset.Apply"/> 에서만 호출한다 (중복 호출 시 범위가 제곱으로 늘어남).
+        /// </summary>
+        public void ApplyWidthScale(float scale) => laneHalfWidth *= scale;
+
         void Awake()
         {
             var spawnGo = GameObject.Find("BallSpawnPoint");
@@ -107,7 +113,9 @@ namespace BowlingGame
             if (prev == GameState.AimingPosition)
             {
                 isAiming = false;
-                if (rb != null) rb.isKinematic = false;
+                // kinematic 해제는 하지 않는다 — 공은 발사 순간(BowlingBall.Launch)까지 얼려 둔다.
+                // 이전에는 여기서 dynamic 으로 되돌려, 세기/커브 게이지를 재는 동안
+                // 공이 중력·접촉 해소로 스스로 움직였다.
                 // 조준(위치) 절차 종료 — 끝단 비프 latch 해제 + 재생 중이던 비프 즉시 정지.
                 edgeLatched = false;
                 AudioManager.Instance?.StopAimBeep();

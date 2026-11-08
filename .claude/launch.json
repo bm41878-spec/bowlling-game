@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webgl-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8085", "--directory", "C:/Users/bmbm7/Desktop/bowlling-game/Build/WebGL"],
+      "port": 8085
+    },
+    {
+      "name": "webgl-release-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8086", "--directory", "C:/Users/bmbm7/Desktop/bowlling-game/Build/WebGL_Release"],
+      "port": 8086
+    }
+  ]
+}
