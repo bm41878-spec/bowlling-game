@@ -14,6 +14,7 @@ namespace BowlingGame
 
         /// <summary>
         /// 현재 투구에서 공이 처음 거터 영역(|x| &gt; gutterX)에 진입하는 순간 1회 발화하는 <b>저수준 즉시 신호</b>.
+        /// 단, <b>핀에 먼저 닿은 투구는 발화하지 않는다</b> — 핀을 맞고 튕겨 빠진 공은 거터볼이 아니다.
         /// Rolling 상태에서만 폴링하며, ResetBall() 에서 플래그가 리셋된다.
         /// 거터 '판정'(거터 진입 + 0핀 동시 충족)은 <see cref="ThrowTransitionController"/> 가
         /// <see cref="EnteredGutterThisThrow"/> 와 쓰러진 핀 수를 결합해 내린다(OnGutterBall).
@@ -93,9 +94,10 @@ namespace BowlingGame
 
             Vector3 launchPos = ballAimer.ConfirmedPosition;
 
-            float force = powerGauge.ConfirmedNormalized;
+            // C 방식(방향만) 은 세기 단계가 없으므로 BallAimer 의 고정값을 쓴다.
+            float force = ballAimer.UsesFixedPower ? ballAimer.FixedPower : powerGauge.ConfirmedNormalized;
             confirmedSpin = spinGauge != null ? spinGauge.ConfirmedSpin : 0f;
-            Launch(launchPos, force);
+            Launch(launchPos, force, ballAimer.ConfirmedDirection);
 
             Debug.Log($"[Ball] 발사! 위치: {launchPos.x:F2}, 세기: {force * 100:F1}%, 회전: {confirmedSpin:F2}");
             // Scoring 전이는 GameManager 가 PhysicsSettleDetector.OnSettled 를 받아 처리한다.
@@ -107,7 +109,16 @@ namespace BowlingGame
         /// 순서를 지킬 것 — 위치 확정 → SyncTransforms → dynamic 복귀 → 운동 상태 클리어 → 힘 적용.
         /// </summary>
         public void Launch(Vector3 startPos, float normalizedForce)
+            => Launch(startPos, normalizedForce, Vector3.forward);
+
+        /// <summary>
+        /// 방향을 지정해 발사한다. C 방식(방향만 조준) 이 호 각도에서 계산한 방향을 넘긴다.
+        /// A/B 방식에서는 <see cref="Vector3.forward"/> 가 들어와 동작이 완전히 같다.
+        /// 발사 이후에는 힘을 더 주지 않는다 — 관성으로만 굴러간다 (커브는 별도 스핀 로직).
+        /// </summary>
+        public void Launch(Vector3 startPos, float normalizedForce, Vector3 direction)
         {
+            Vector3 dir = direction.sqrMagnitude < 0.0001f ? Vector3.forward : direction.normalized;
             // 1) 아직 kinematic 인 동안 위치 확정. 조준 중 BallAimer 가 transform 에 직접 대입한
             //    위치를 물리 엔진에 반영한다 — Unity 6 의 autoSyncTransforms=false 환경에서
             //    이 호출이 없으면 stale 한 Rigidbody.position 에서 시뮬레이션이 시작된다.
@@ -122,7 +133,7 @@ namespace BowlingGame
             rb.angularVelocity = Vector3.zero;
 
             float force = Mathf.Lerp(minForce, maxForce, normalizedForce);
-            rb.AddForce(Vector3.forward * force, ForceMode.Impulse);
+            rb.AddForce(dir * force, ForceMode.Impulse);
         }
 
         public bool IsRolling => rb.linearVelocity.magnitude > 0.05f;
@@ -293,13 +304,8 @@ namespace BowlingGame
         public bool IsInGutter => Mathf.Abs(transform.position.x) > gutterX;
 
         /// <summary>
-        /// 레인 폭 프리셋 반영 — 거터 임계를 레인 폭에 맞춘다.
-        /// <see cref="LaneWidthPreset.Apply"/> 에서만 호출한다 (중복 호출 시 임계가 제곱으로 늘어남).
-        /// </summary>
-        public void ApplyWidthScale(float scale) => gutterX *= scale;
-
         /// <summary>
-        /// 이번 투구에서 공이 거터 영역에 진입한 적이 있는지. <see cref="ResetBall"/> 에서 리셋된다.
+        /// 이번 투구에서 공이 <b>핀에 닿기 전에</b> 거터 영역에 진입한 적이 있는지. <see cref="ResetBall"/> 에서 리셋된다.
         /// 거터 판정(거터 진입 + 0핀)에 <see cref="ThrowTransitionController"/> 가 사용한다.
         /// </summary>
         public bool EnteredGutterThisThrow => hasEnteredGutterThisThrow;
@@ -309,6 +315,9 @@ namespace BowlingGame
             // Rolling 상태에서만 거터 진입 폴링. Aiming/Scoring/Ready 등은 무시.
             // 폴링 비용은 transform.position.x 한 번 + 분기 — 매 프레임 부담 없음.
             if (hasEnteredGutterThisThrow) return;
+            // 핀에 이미 닿았다면 거터로 보지 않는다 — 거터볼은 "핀에 닿지 못하고 도랑으로 빠진 공"이다.
+            // 핀을 맞고 튕겨 나간 공까지 거터로 집계하면 판정도 로그도 오해를 부른다.
+            if (hasPlayedPinHitThisThrow) return;
             if (stateManager == null || stateManager.CurrentState != GameState.Rolling) return;
             if (!IsInGutter) return;
 

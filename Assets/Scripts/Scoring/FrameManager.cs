@@ -230,5 +230,20 @@ namespace Bowling.Scoring
 
         /// <summary>이 게임의 총 프레임 수 (UI 활용용). 초기화 전에는 0.</summary>
         public int GetFrameCount() => ruleConfig != null ? ruleConfig.FrameCount : 0;
+
+        /// <summary>
+        /// 이 게임의 모든 Frame (0-base 순서). 초기화 전에는 빈 목록.
+        /// </summary>
+        /// <remarks>
+        /// 결과 화면(<c>Gameover_scene</c>)으로 전달할 스냅샷 용도. 반환되는 Frame 은 <b>복사본이 아니라 실제 인스턴스</b>지만,
+        /// <see cref="Initialize"/> 가 매 게임 <c>new List&lt;Frame&gt;</c> + <c>new Frame()</c> 로 새로 만들기 때문에
+        /// 한 번 끝난 게임의 Frame 은 이후 어떤 경로로도 변경되지 않는다 (재시작해도 옛 인스턴스는 건드리지 않음).
+        /// Frame 의 setter 가 <c>internal</c> (Bowling.Domain 전용) 이라 UI 쪽에서 복사본을 만들 수 없으므로 이 방식을 쓴다.
+        /// </remarks>
+        public IReadOnlyList<Frame> GetFrames()
+        {
+            if (frames == null) return Array.Empty<Frame>();
+            return frames;
+        }
     }
 }

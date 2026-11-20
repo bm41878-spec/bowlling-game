@@ -192,22 +192,21 @@ static int       CalculateTotalScore(List<Frame> frames);
 - 직렬화 필드: `stopPosition`, `followSmoothTime = 0.25f`, `returnSmoothTime = 0.4f`, `stopOffsetFromHeadPin`, `followOffsetZ`
 - `Rolling` 진입 시 공 추적, `AimingPosition` 진입 시 원위치 복귀.
 - `Pin_01` (pinId==1) 위치 기반으로 `stopPosition.z` 자동 보정 (`RecomputeStopZ`).
-- **`public void ApplyPreset(CameraPreset.Preset)`** — 카메라 FOV / 위치 / 피치 + 추적 거리 3종을 한 번에 적용하고 `initialPosition`·`stopPosition` 을 다시 잡는다. `Start` 가 `SaveData.cameraPreset` 을 읽어 자동 호출하므로 **씬에 직렬화된 카메라 값은 프리셋 미적용 환경의 폴백일 뿐**이다. 런타임 변경은 `CameraPreset.Apply(index)` 경유.
+- **카메라 값은 씬 고정** (2026-11-18 프리셋 제거) — FOV 30 / 위치 (0, 2.1, −3.2) / 피치 18.5° / `followOffsetZ` 3.66 / `stopOffsetFromHeadPin` 5.17 / `stopPosition.y` 2.4. `Start` 는 씬 값을 그대로 쓰고 `initialPosition` 과 `RecomputeStopZ()` 만 잡는다. **FOV 를 바꾸면 거리 3종도 `tan(기준/2)/tan(새/2)` 배율로 함께 재계산할 것** — FOV 만 바꾸면 투구 중 핀이 화면을 꽉 채우거나 반대로 멀어진다.
 
-#### `LaneWidthPreset` (static, `Assets/Scripts/Settings/`)
-- `Preset` 구조체 — `Label`, `Scale`
-- `Presets[]` — **인덱스 = `SaveData.laneWidthPreset`**. 0 = 기본(×1.0), 1 = 넓게(×1.2), 2 = 가장 넓게(×1.5)
-- `Apply(int)` — `Lane_Root` 자식들의 `localPosition.x` / `localScale.x` 와 핀의 `localPosition.x` 에 배율을 곱하고, 폭 연동 상수 3개(`BallAimer.laneHalfWidth`, `BowlingBall.gutterX`, `AimGuide.gutterX`) 를 `ApplyWidthScale` 로 동기화
-- **현재 값에 곱하는 방식이라 씬당 1회만 호출해야 한다** — 두 번 부르면 폭이 제곱이 된다. 호출 지점은 `LaneWidthSetter.Awake` 하나뿐
+#### `ControlScheme` (static, `Assets/Scripts/Settings/`)
+- 상수: `PositionPower`(0, A) / `PositionPowerSpin`(1, B) / `DirectionOnly`(2, C) / `DefaultIndex`(=A)
+- `Labels` — **인덱스 = `SaveData.controlScheme`**. 순서 변경·중간 삽입 금지 (구 save.json 선택이 어긋남)
+- `UsesSpinStage(int)` — B 인가 (PowerGaugeUI 가 커브 단계 분기에 사용)
+- `IsSingleInput(int)` — C 인가 (BallAimer 가 호 조준 + 고정 세기 분기에 사용)
+- ⚠ **게임 시작 전에만 선택 가능** — `BallAimer.Start` 가 1회만 읽는다. 투구 도중 단계 구성이 바뀌면 상태 머신이 중간 상태에 갇힌다
 
-#### `LaneWidthSetter` (MonoBehaviour, `[DefaultExecutionOrder(-100)]`)
-- `Game.unity` 의 `Lane_Root` 에 부착. Awake 에서 `LaneWidthPreset.Apply(SaveData.laneWidthPreset)` 1회 호출
-- 실행 순서가 음수인 이유 — `BallAimer` / `BowlingBall` 이 폭 연동 값을 쓰기 전에 레인이 먼저 늘어나 있어야 한다
-
-#### `CameraPreset` (static, `Assets/Scripts/Settings/`)
-- `Preset` 구조체 — `Label`, `FieldOfView`, `Position`, `PitchDegrees`, `FollowOffsetZ`, `StopOffsetFromHeadPin`, `StopHeight`
-- `Presets[]` — **인덱스 = `SaveData.cameraPreset`**. 0 = 기본(A, FOV 30), 1 = 망원 강조(B, FOV 25)
-- `Clamp(int)` / `Labels` / `Apply(int)` — `Apply` 는 로드된 씬에서 `CameraFollow` 를 찾아 적용하고, 없으면(게임 씬 미로드) 조용히 무시
+#### `BallAimer` — C 방식 (호 조준)
+- 직렬화: `arcHalfAngleDegrees`(7) / `arcSweepSpeed`(1.6) / `fixedPower`(0.65)
+- C 에서는 공을 x=0 에 고정하고 `currentAimAngle` 만 `±arcHalfAngleDegrees` 로 왕복
+- `ConfirmedDirection` / `CurrentAimDirection` / `SingleInputAiming` / `UsesFixedPower` / `FixedPower` 공개
+- 확정 시 `AimingPower` 를 건너뛰고 바로 `Rolling` 으로 전이
+- 씬 고정값은 `arcHalfAngleDegrees` **8.4** (×1.2 반영 후)
 
 ### 3-5. 입력 / UI
 
@@ -254,11 +253,13 @@ static int       CalculateTotalScore(List<Frame> frames);
   - `SetGameOver(int finalScore)` — 모든 강조 해제 + 종료 시각 마무리
   - `ClearAll()` — 텍스트만 빈 상태로 (생성된 카드 유지)
 - 구현체:
-  - `CardLayoutRenderer` (옵션 B, 2026-06-23 구현) — 카드 그리드. `cardContainer` (Transform, HorizontalLayoutGroup) + `cardPrefab` (GameObject, FrameCardUI 부착)
-  - `TableLayoutRenderer` (옵션 C, **미구현** — 다음 세션) — 3행 테이블
+  - `CardLayoutRenderer` (옵션 B, 2026-06-23 구현) — `cardContainer` (Transform + 레이아웃 그룹) 에 `cardPrefab` (FrameCardUI 부착) 을 frameCount 개 찍는다. **배치 방향은 코드가 아니라 컨테이너의 레이아웃 그룹 + 프리팹이 결정**한다.
+    - 인게임 (2026-11-19~): `RowContainer` (**VerticalLayoutGroup**) + **`FrameRow.prefab`** → 좌측 세로 컬럼
+    - 결과 화면 (예정): 가로 그룹 + `FrameCard.prefab` 로 같은 렌더러 재사용 예정
+  - `TableLayoutRenderer` (옵션 C, **미구현**) — 3행 테이블
 
-#### `FrameCardUI` (MonoBehaviour) — 카드 1개 prefab 컴포넌트
-- 위치: `Assets/Prefabs/FrameCard.prefab`
+#### `FrameCardUI` (MonoBehaviour) — 프레임 1개 prefab 컴포넌트
+- 위치: `Assets/Prefabs/FrameCard.prefab` (세로 카드 140×180) / **`Assets/Prefabs/FrameRow.prefab` (가로 행 300×76, 2026-11-19 신설 — 인게임 좌측 컬럼용)**. **두 프리팹은 같은 `FrameCardUI` 를 쓰고 자식 이름도 같다** — 내부 레이아웃 그룹만 Vertical / Horizontal 로 다르다.
 - 직렬화 필드: `frameNumberLabel`, `throwsLabel`, `scoreLabel` (TMP_Text), `background`, `highlight` (Image), `normalBgColor`/`activeBgColor`/`gameOverBgColor`
 - 표시 규칙 상수 (단일 출처): `STRIKE_FIRST = "X"`, `STRIKE_SEC = "-"`, `SPARE_SEC = "/"`, `EMPTY = ""`
 - 공개 API: `SetFrameNumber(int)`, `SetThrows(Frame, int throwNumber)`, `SetCumulativeScore(int)`, `SetActive(bool)`, `SetGameOver()`, `Clear()`
@@ -273,12 +274,18 @@ static int       CalculateTotalScore(List<Frame> frames);
 - 로그 prefix: `[MainMenu]`
 - Start/OnDestroy/Validate 패턴은 ScoreboardUI 와 동일.
 
-#### `ResultUI` (MonoBehaviour) — **골격만 구현** (단계 2~5 미완)
-- 위치: `Assets/Scripts/UI/ResultUI.cs`
-- 직렬화 필드 7개: `frameManager`, `panelRoot`, `finalScoreText`/`strikeCountText`/`spareCountText`, `restartButton`/`mainMenuButton`
-- 메서드 스텁만 존재 (Start, OnDestroy, HandleGameInitialized, HandleGameOver, OnRestartClicked, OnMainMenuClicked)
-- 진행 가이드: `NEXT_SESSION.md` §2~6
-- 로그 prefix: `[Result]` (단계 2 부터 추가 예정)
+#### `FinalScoreboardUI` (MonoBehaviour) — 2026-11-19 신설, `Gameover_scene` 의 Canvas 에 부착
+- 위치: `Assets/Scripts/UI/FinalScoreboardUI.cs`. 로그 prefix `[FinalScoreboard]`
+- 직렬화 필드 2개: `layout` (`ScoreboardLayoutRenderer` **추상 타입** — §7-23), `titleLabel` (TMP_Text, 선택)
+- **인게임 `ScoreboardUI` 의 결과 화면 짝.** 차이는 데이터 출처뿐:
+  - `ScoreboardUI` — `FrameManager` 5개 이벤트 **실시간 구독**
+  - `FinalScoreboardUI` — `GameResultHolder.LastFrames` **스냅샷 1회 재생** (결과 씬엔 FrameManager 가 없다)
+- `Start()` 에서 프레임마다 `layout.UpdateFrameComplete(i, frame, 누적)` → 마지막에 `layout.SetGameOver(finalScore)`.
+  `UpdateFrameComplete` 가 1·2구 표시와 누적 점수를 함께 확정하므로 `UpdateThrow` 선행 호출은 불필요.
+- 누적 점수는 `FrameScore` 를 앞에서부터 더해 구한다 (독립 프레임 점수 방식 — `FrameManager.GetTotalScore()` 와 같은 규칙)
+- 제목 포맷 상수: `TITLE_FORMAT = "{0} 결과"`, `TITLE_FALLBACK = "게임 결과"`
+
+> `ResultUI` (Game.unity 오버레이 패널 골격) 는 2026-11-14 에 삭제됐다. 결과 화면은 `Gameover_scene` + `GameOverUI`(버튼) + `FinalScoreboardUI`(스코어보드) 구성이다.
 
 ### 3-6. FrameManager — 진행 상태 관리자 (`Bowling.Scoring`)
 **도메인이지만 MonoBehaviour** — `Bowling.Domain` 어셈블리 내에서 Unity 의존.
@@ -287,7 +294,7 @@ static int       CalculateTotalScore(List<Frame> frames);
   - `void Initialize(BowlingRuleConfig config)` — 게임 시작 / 재시작
   - `void RecordThrow(int pinsKnockedDown)` — 0~10
   - `void AdvanceToNextFrame()` — 마지막 프레임에서는 호출 금지
-  - 조회: `IsFrameComplete()`, `IsGameOver()`, `GetCurrentFrameIndex()` (0-base), `GetCurrentThrowNumber()` (1|2), `GetTotalScore()`, `GetFrame(int index)`, `GetFrameCount()`
+  - 조회: `IsFrameComplete()`, `IsGameOver()`, `GetCurrentFrameIndex()` (0-base), `GetCurrentThrowNumber()` (1|2), `GetTotalScore()`, `GetFrame(int index)`, `GetFrameCount()`, `GetFrames()` (2026-11-19 — 결과 화면 스냅샷용 `IReadOnlyList<Frame>`)
 - 이벤트 (발행 순서):
   - `OnGameInitialized()` (페이로드 없음)
   - `OnFrameStarted(int frameIndex)` — 0-base
@@ -321,7 +328,8 @@ static int       CalculateTotalScore(List<Frame> frames);
 - `static int GetBestScore(string modeName)` — 없으면 0
 - `static List<GameRecord> GetHighScores(string modeName)` — 모드별 정렬된 상위 목록
 - **모드별 분리**: `modeName` 기준 그룹화 (쇼트/풀 만점이 달라 통합 시 풀이 항상 이김). 로그 prefix `[HighScore]`
-- **연동**: `GameManager.OnEnterGameOver` 가 `Record(...)` 호출 후 결과를 `GameResultHolder.SetResult(score, mode, bestScore, isNewRecord)` 로 인계 → `GameOverUI` 가 표시
+- **연동**: `GameManager.OnEnterGameOver` 가 `Record(...)` 호출 후 결과를 `GameResultHolder.SetResult(score, mode, bestScore, isNewRecord, frames)` 로 인계 → `FinalScoreboardUI` 가 최종 스코어보드 표시
+- **2026-11-19**: `bestScore`/`isNewRecord` 는 **화면에 표시하지 않는다** (사용자 지정). `Record(...)` 호출과 Holder 보관은 그대로 — 추후 리더보드용 수집. 이 호출을 빼지 말 것.
 
 ### 3-8. 오디오 (2026-06-22 신설)
 
@@ -637,11 +645,18 @@ pinManager.ResetAllPins()
 28. **`SettingsApplier.OnSceneLoaded` 의 sceneLoaded 후크** — 씬 전이마다 UI 스케일을 새 씬의 CanvasScaler 에 재적용. 제거 시 Game 씬 진입 후 점수판 캔버스가 기준 1920×1080 으로 돌아가 사용자 설정이 휘발됨. `LoadSceneMode.Single` 분기 유지 (additive 로드 제외).
 29. **모든 씬 Canvas 의 CanvasScaler 통일 규칙** (§11-5) — `ScaleWithScreenSize 1920×1080 match=0.5`. 새 씬 추가 시 또는 기존 Canvas 수정 시 이 4개 값을 어기지 말 것. `ConstantPixelSize` 모드는 빌드 시 해상도마다 UI 가 다르게 보이고 `DisplaySetter.ApplyUIScale` 가 무시한다. 2026-06-24 Gameover_scene 의 ConstantPixelSize 800×600 으로 인한 UI 겹침 사례가 단일 출처 위반의 대표 사례.
 
-30. **`CameraPreset.Presets` 의 거리 4종은 한 묶음** — `Position.z` / `FollowOffsetZ` / `StopOffsetFromHeadPin` / `StopHeight` 는 해당 프리셋의 `FieldOfView` 와 짝이다. FOV 만 바꾸면 조준 시점은 그럴듯해도 **투구 중 핀이 화면을 꽉 채우거나 반대로 멀어진다.** 배율 = `tan(기준FOV/2) / tan(새FOV/2)` 로 거리들을 함께 재계산할 것. 또한 `Presets` 배열 **순서 변경·중간 삽입 금지** — 인덱스가 `SaveData.cameraPreset` 에 그대로 저장되어 있어 기존 save.json 의 선택이 어긋난다. 추가는 반드시 끝에 append.
+29-a. **`SaveSystem.Load()` 는 공유 인스턴스를 반환한다** (2026-11-14 캐시 도입). 호출자가 필드를 고치면 캐시에도 반영되며, 이것이 의도된 동작이다 — 과거에는 컴포넌트마다 서로 다른 스냅샷을 들고 있다가 각자 `Save` 해서 **서로의 변경을 덮어썼다** (`SettingsUI._saveCache` 가 씬 수명 내내 들고 있던 스냅샷 + `HighScoreService` 의 독립 Load→Save 가 대표 사례). 캐시를 제거하거나 `Load()` 가 매번 새 인스턴스를 만들도록 되돌리면 이 데이터 유실이 되살아난다. 게임 밖에서 save.json 을 직접 고친 경우에만 `InvalidateCache()` 를 쓸 것.
 
-31. **레인 폭은 `Lane_Root` 의 `localScale` 로 바꾸지 말 것** — 부모를 x 축으로만 비균등 스케일하면 그 아래에서 회전하는 강체(쓰러지는 핀) 가 찌그러진다. `LaneWidthPreset.Apply` 처럼 자식들의 `localPosition.x` / `localScale.x` 를 개별로 곱하고, 핀은 **위치만** 벌릴 것 (핀의 `localScale` 은 건드리지 않는다).
-32. **폭 연동 상수 3개는 한 묶음** — `BallAimer.laneHalfWidth`(0.43), `BowlingBall.gutterX`(0.533), `AimGuide.gutterX`(0.533). 레인 폭을 바꾸면 셋 다 같은 배율을 받아야 한다. 하나라도 빠지면 조준 왕복 범위가 레인을 벗어나거나, 거터 판정이 실제 거터와 어긋나거나, 예상 경로선이 엉뚱한 곳에서 잘린다.
-33. **`LaneWidthPreset.Apply` 의 호출 지점을 늘리지 말 것** — 현재 좌표에 배율을 곱하는 방식이라 멱등하지 않다. 유일한 호출자는 `LaneWidthSetter.Awake` 이며, 설정 UI 는 **저장만** 하고 적용하지 않는다 (투구 중 레인이 넓어지면 공·핀이 순간이동).
+30. **폭 연동 상수 3개는 한 묶음** — `BallAimer.laneHalfWidth`(**0.516**), `BowlingBall.gutterX`(**0.6396**), `AimGuide.gutterX`(**0.6396**). ×1.2 가 씬에 고정된 뒤의 값이다. 레인 지오메트리를 또 바꾸면 셋 다 같은 배율을 받아야 한다 — 하나라도 빠지면 조준 왕복이 레인을 벗어나거나, 거터 판정이 실제 거터와 어긋나거나, 예상 경로선이 엉뚱한 곳에서 잘린다. `BallAimer.arcHalfAngleDegrees`(**8.4**) 도 같이 본다.
+31. **레인/핀/공 크기는 ×1.2 가 씬에 고정** (2026-11-18) — 프리셋이 아니다. 다시 스케일할 일이 생기면 **부모 `localScale` 로 하지 말 것**: x 축만 비균등 스케일하면 그 아래에서 회전하는 강체(쓰러지는 핀)가 찌그러진다. 자식들의 `localPosition`/`localScale` 을 개별로 곱하고, **투구 거리(스폰 z=0.5 → 헤드핀 z=8.267)는 건드리지 말 것** — 카메라와 투구 시간이 같이 틀어진다. 공 크기를 바꾸면 **스폰 y 도 반지름만큼 올려야** 한다 (현재 0.17, 레인 윗면 0.05 + 반지름 0.12).
+32. **핀 랙 간격과 핀 두께는 공 지름과 묶여 있다** — 같은 줄 핀 간격(0.367) − 핀 두께(0.128) = 빈 틈 0.240 이 공 지름(0.239) 과 거의 같아야 한다. 실제 볼링에서 공이 인접한 두 핀 사이를 지나갈 수 없는 성질이며, 이게 깨지면 공이 핀 사이로 빠져나가 스트라이크 연쇄가 무너진다. 핀 간격만 늘리고 핀 두께를 그대로 두는 변경을 하지 말 것.
+33. **인게임 스코어보드의 행 높이는 10행 기준 고정** (2026-11-19) — `RowContainer` 는 높이 796px (76×10 + 4×9) 고정 + UpperCenter 정렬 + `VerticalLayoutGroup.childControlHeight = false`. **이 셋을 같이 봐야 한다**: `childControlHeight` 를 켜면 5프레임일 때 행이 늘어나 글자 크기 대비 칸이 커지고, 컨테이너를 flexible 로 바꾸면 프레임 수에 따라 행 높이가 달라진다. 5프레임에서 아래 절반이 비는 것은 **버그가 아니라 지정된 동작**이다. 높이 796 을 바꾸면 `CurrentFrameLabel` (컬럼 하단에서 162px) 과의 24px 여유가 사라진다.
+34. **`CardLayoutRenderer` 의 배치 방향은 코드에 없다** — 컨테이너의 레이아웃 그룹(Horizontal/Vertical)과 `cardPrefab` 이 결정한다. 세로/가로 배치를 바꾸려고 렌더러를 상속하거나 분기를 추가하지 말 것. 인게임 = `RowContainer`(Vertical) + `FrameRow.prefab`, 결과 화면 = `ScoreboardRow`(Horizontal) + `FrameCard.prefab` 로 **같은 렌더러를 재사용**한다.
+35. **결과 화면의 프레임 데이터는 `GameResultHolder.LastFrames` 스냅샷이 유일한 출처** — `Gameover_scene` 에는 `FrameManager` 가 없다 (씬이 갈리며 파괴됨). `GameManager.OnEnterGameOver` 의 `SetResult(..., frameManager.GetFrames())` 에서 `frames` 인자를 빼면 결과 화면이 빈 스코어보드가 된다. 스냅샷은 **Frame 인스턴스를 공유**한다 — 복사하지 않는 이유는 `Frame` 의 setter 가 `Bowling.Domain` 에 `internal` 이라 UI 어셈블리에서 복사본을 만들 수 없기 때문이고, 안전한 이유는 `FrameManager.Initialize` 가 매 게임 Frame 을 새로 만들기 때문이다. **Initialize 를 "기존 Frame 재사용 + 값 리셋" 으로 바꾸면 이 가정이 깨진다.**
+36. **결과 화면 `FrameCard.prefab` 의 자동 글자 크기를 끄지 말 것** — 카드 폭이 프레임 수에 따라 변한다 (5프레임 347px / 10프레임 166px, 컨테이너 1800px 공유). 고정 크기로 바꾸면 풀 모드에서 글자가 카드를 넘친다. `LayoutElement` 의 `minWidth 120 / preferredWidth 340 / flexibleWidth 1` 조합도 같은 이유로 한 묶음이다.
+37. **`NotoSansKR-Black SDF` 는 Dynamic 폰트 에셋이다** (2026-11-20 전환) — `sourceFontFile` (`NotoSansKR-Black.ttf`) 참조가 **비면 빌드에서 글자가 하나도 안 나온다**. Static 시절엔 null 이어도 됐으므로 옛 문서·습관을 따라 지우지 말 것. TTF 임포터의 `includeFontData` 도 True 를 유지해야 한다. 설정 3종은 한 묶음: `samplingPointSize 90` / `atlasPadding 9` / 머티리얼 `_GradientScale 10` (= padding + 1). padding 을 바꾸면 `_GradientScale` 도 같이 바꿔야 SDF 테두리가 맞는다.
+38. **폰트 에셋을 다시 구울 일이 생기면 새로 만들어 교체하지 말 것** — 머티리얼 서브에셋 fileID(`-541273331307260562`) 가 바뀌어 모든 씬·프리팹의 TMP 머티리얼 참조가 끊긴다. 기존 에셋을 제자리에서 수정하는 절차는 README §14-31 참조. 특히 `m_FaceInfo` 이식을 빼먹으면 16pt 메트릭으로 90pt 글리프를 배치해 글자가 겹친다.
+39. **한글 때문에 Static 으로 되돌리지 말 것** — 한글 음절 11,172자를 4096×4096 에 정적으로 넣으려면 글리프당 약 25px 가 한계라 글자가 흐려지고, padding 을 주면 더 안 들어간다. Dynamic 이 이 프로젝트에서 한글을 선명하게 쓰는 유일한 방법이다.
 
 ---
 
@@ -714,18 +729,34 @@ UI 작업 시 어느 노드를 가리켜야 하는지 빠르게 확인하기 위
 ### 11-2. Game.unity Canvas 자식 (점수판 영역, 2026-06-23 재작성)
 ```
 Canvas (ScoreboardUI + CardLayoutRenderer 부착)
-├── ScoreboardTop                  (RectTransform, 상단 stretch, height=200)
-│   ├── CardContainer              (Transform, HorizontalLayoutGroup) ← CardLayoutRenderer.cardContainer
-│   │   └── (FrameCard prefab 인스턴스들, Initialize 시 frameCount 만큼 동적 생성)
-│   └── TotalScorePanel            (Image 배경 + 자식 2개)
-│       ├── TotalLabel             (TMP_Text "TOTAL")
-│       └── TotalValue             (TMP_Text 큰 숫자)            ← ScoreboardUI.totalScoreText
-└── CurrentFrameLabel              (TMP_Text "프레임 N / M구")    ← ScoreboardUI.currentFrameLabel
+└── ScoreboardLeft                 (RectTransform, 좌측 세로 stretch, width=300, 상하 여백 24)
+    ├── ColumnPanel                (Image, 검정 alpha 0.55 — 레인 위 가독성)
+    ├── Header                     (HorizontalLayoutGroup, 행과 동일한 3열)
+    │   ├── H_Frame / H_Throws / H_Score  (TMP_Text 17pt "프레임"/"투구"/"합계")
+    ├── RowContainer               (Transform, VerticalLayoutGroup) ← CardLayoutRenderer.cardContainer
+    │   └── (FrameRow prefab 인스턴스들, Initialize 시 frameCount 만큼 동적 생성)
+    ├── CurrentFrameLabel          (TMP_Text "프레임 N / M구")    ← ScoreboardUI.currentFrameLabel
+    └── TotalScorePanel            (Image 배경 + 자식 2개, 컬럼 하단)
+        ├── TotalLabel             (TMP_Text "총점")
+        └── TotalValue             (TMP_Text 46pt 숫자)          ← ScoreboardUI.totalScoreText
 ```
+
+> 2026-11-19 이전에는 `ScoreboardTop` (상단 가로 띠, height=200) + `CardContainer` (HorizontalLayoutGroup) 였고, `CurrentFrameLabel` 은 Canvas 직속 좌하단이었다. 가로 띠가 핀 덱을 가려 좌측 세로로 옮겼다 (README §14-29).
 
 기존 `total_score` / `total_score_n` / `current_frame` / `frame_n` / `frame_N_first` / `frame_/` / `frame_N_sec` 노드는 2026-06-23 에 모두 제거됨.
 
-FrameCard prefab 자식 구조 (`Assets/Prefabs/FrameCard.prefab`):
+FrameRow prefab 자식 구조 (`Assets/Prefabs/FrameRow.prefab`) — **인게임에서 실제로 찍히는 프리팹**:
+```
+FrameRow (RectTransform 300×76, FrameCardUI + LayoutElement min/preferredHeight=76)
+├── Background      (Image)                              ← FrameCardUI.background
+├── Highlight       (Image, 비활성 시작, 노란 alpha=0.25) ← FrameCardUI.highlight (옵션)
+└── Content         (HorizontalLayoutGroup, padding L12/R14, spacing 6)
+    ├── FrameNumber (TMP_Text 26pt, 회색, 폭 56 고정)     ← FrameCardUI.frameNumberLabel
+    ├── Throws      (TMP_Text 34pt, flexibleWidth=1)     ← FrameCardUI.throwsLabel
+    └── Score       (TMP_Text 30pt, 우측정렬, 폭 86 고정) ← FrameCardUI.scoreLabel
+```
+
+FrameCard prefab 자식 구조 (`Assets/Prefabs/FrameCard.prefab`) — 세로 카드, **현재 씬에서 미사용**. 결과 화면 가로 배치용으로 남겨 둔다:
 ```
 FrameCard (RectTransform 140×180, FrameCardUI + LayoutElement preferredWidth=140)
 ├── Background      (Image)                              ← FrameCardUI.background
@@ -756,15 +787,17 @@ Canvas (ScaleWithScreenSize 1920×1080)
 └── SettingsButton (Image + Button + Label TMP "설정" 56pt)                ← MainMenuUI.settingsButton (y=-300)
 ```
 
-### 11-7. Gameover_scene.unity Canvas 자식 (5개, 2026-06-24 재배치)
+### 11-7. Gameover_scene.unity Canvas 자식 (4개, 2026-11-19 최종 스코어보드로 재구성)
 ```
-Canvas (ScaleWithScreenSize 1920×1080) — GameOverUI 부착
-├── new_record       (TMP "신기록!" 90pt 노랑, anchor=center y=+370)  ← GameOverUI.newRecordText (조건부 활성)
-├── gameover_score   (TMP 점수 숫자 220pt 흰, anchor=center y=+100)   ← GameOverUI.gameOverScoreText
-├── best_score       (TMP "최고 점수: N" 56pt, anchor=center y=-140)  ← GameOverUI.bestScoreText
-├── Mainmenu_button  (Button "메인메뉴" 36pt, anchor=center y=-300)   ← GameOverUI.mainMenuButton
-└── Quit_button      (Button "게임종료" 36pt, anchor=center y=-410)   ← GameOverUI.quitButton
+Canvas (ScaleWithScreenSize 1920×1080) — GameOverUI + CardLayoutRenderer + FinalScoreboardUI 부착
+├── Title            (TMP "{모드명} 결과" 76pt, anchor=center y=+360) ← FinalScoreboardUI.titleLabel
+├── ScoreboardRow    (HorizontalLayoutGroup 1800×390, y=+80)          ← CardLayoutRenderer.cardContainer
+│   └── (FrameCard prefab 인스턴스들 — frameCount 만큼 동적 생성)
+├── Mainmenu_button  (Button "메인메뉴" 36pt, anchor=center y=-280)   ← GameOverUI.mainMenuButton
+└── Quit_button      (Button "게임종료" 36pt, anchor=center y=-395)   ← GameOverUI.quitButton
 ```
+
+> 2026-11-19 이전에는 `new_record` (신기록!) / `gameover_score` (큰 점수 숫자) / `best_score` (최고 점수) 세 개가 있었고 `GameOverUI` 가 직접 표시했다. 사용자 지정으로 **셋 다 삭제**하고 최종 스코어보드로 대체했다 (README §14-30). 수집은 유지된다 — `HighScoreService.Record` 호출을 지우지 말 것.
 모든 요소 anchor=center pivot=center. y 간격은 화면 1080 기준이며 ScaleWithScreenSize 라 다른 해상도에서도 비례 유지.
 
 ### 11-5. CanvasScaler 설정 (2026-06-24 재확인 — 모든 씬 통일)

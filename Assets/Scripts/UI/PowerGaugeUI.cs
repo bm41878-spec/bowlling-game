@@ -70,7 +70,7 @@ namespace BowlingGame
                 // (BallAimer가 동일 입력 이벤트로 AimingPosition→AimingPower 전이를 트리거할 수 있음)
                 enteredFrame = Time.frameCount;
                 // 커브볼 조작 설정 1회 캐싱 — 확정 시 다음 상태 분기에 사용.
-                spinStageEnabled = SaveSystem.Load().spinControlEnabled;
+                spinStageEnabled = ControlScheme.UsesSpinStage(SaveSystem.Load().controlScheme);
             }
             if (prev == GameState.AimingPower)
                 gameObject.SetActive(false);
@@ -83,7 +83,7 @@ namespace BowlingGame
 
             ConfirmedNormalized = currentNormalized;
             Debug.Log($"[PowerGauge] 세기 확정: {ConfirmedNormalized * 100:F1}%" +
-                      (spinStageEnabled ? "" : " (커브볼 조작 OFF — 스핀 단계 생략, 직구 발사)"));
+                      (spinStageEnabled ? "" : " (A 방식 — 커브 단계 생략, 직구 발사)"));
             // 접근성 옵션 분기 — ON: 3단계 (회전 게이지로), OFF: 2단계 (즉시 발사).
             // OFF 경로의 직구 보장은 SpinGaugeUI 가 AimingPosition 진입 시 ConfirmedSpin=0 으로 리셋하여 담당.
             stateManager.ChangeState(spinStageEnabled ? GameState.AimingSpin : GameState.Rolling);

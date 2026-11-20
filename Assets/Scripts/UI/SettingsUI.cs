@@ -17,7 +17,7 @@ namespace BowlingGame
     ///   <item>1 — Display (placeholder)</item>
     ///   <item>2 — Controls (placeholder)</item>
     ///   <item>3 — Accessibility (placeholder)</item>
-    ///   <item>4 — 기타 (카메라 시점 프리셋. 씬의 GameObject 이름은 역사적 이유로 Tab_UX / UXPanel)</item>
+    ///   <item>4 — 기타 (2026-11-18 비움 — 카메라·레인폭 설정 제거로 항목이 사라져 탭 버튼을 숨겨 둠)</item>
     /// </list>
     /// 값 변경 흐름: 슬라이더/토글 입력 → SaveData 캐시 갱신 → AudioManager 즉시 반영 → SaveSystem.Save.
     /// 표시 로직 인라인 금지 (AI_PROMPT_REFERENCE.md §7-12) — 핸들러는 모델 갱신과 시스템 호출만, 표시 갱신은 RefreshAudioLabels 헬퍼로 분리.
@@ -58,17 +58,12 @@ namespace BowlingGame
 
         [Header("Accessibility 탭")]
         [SerializeField] private Toggle audioGuideToggle;
-        [SerializeField, Tooltip("커브볼(스핀) 조작 단계 토글. ON=조준 3단계(위치→세기→회전), OFF=2단계(위치→세기, 직구).")]
-        private Toggle spinControlToggle;
+        [SerializeField, Tooltip("조작 방식 선택 (A/B/C). 항목은 ControlScheme.Labels 가 단일 출처. 게임 시작 전에만 변경 가능하므로 인게임 오버레이에서는 비활성화된다.")]
+        private TMP_Dropdown controlSchemeDropdown;
         [SerializeField, Tooltip("예상 경로 가이드 토글. ON=조준 중 공의 예상 경로를 레인 위에 선/곡선으로 표시.")]
         private Toggle aimGuideToggle;
         [SerializeField] private TMP_Dropdown colorblindDropdown;
 
-        [Header("기타 탭")]
-        [SerializeField, Tooltip("게임 씬 카메라의 원근 압축 프리셋. 항목·값은 CameraPreset.Presets 가 단일 출처.")]
-        private TMP_Dropdown cameraPresetDropdown;
-        [SerializeField, Tooltip("레인 가로 폭 프리셋. 항목·배율은 LaneWidthPreset.Presets 가 단일 출처. 적용은 다음 게임부터.")]
-        private TMP_Dropdown laneWidthDropdown;
 
         [Header("Footer")]
         [SerializeField] private Button backToMainMenuButton;
@@ -106,7 +101,6 @@ namespace BowlingGame
             BindDisplayTab();
             BindControlsTab();
             BindAccessibilityTab();
-            BindMiscTab();
             _initializingUI = false;
 
             BindTabs();
@@ -246,10 +240,16 @@ namespace BowlingGame
                 audioGuideToggle.onValueChanged.AddListener(OnAudioGuideChanged);
             }
 
-            if (spinControlToggle != null)
+            if (controlSchemeDropdown != null)
             {
-                spinControlToggle.isOn = _saveCache.spinControlEnabled;
-                spinControlToggle.onValueChanged.AddListener(OnSpinControlChanged);
+                controlSchemeDropdown.ClearOptions();
+                // 인덱스 = SaveData.controlScheme — 목록 순서는 ControlScheme.Labels 와 1:1.
+                controlSchemeDropdown.AddOptions(new List<string>(ControlScheme.Labels));
+                controlSchemeDropdown.SetValueWithoutNotify(ControlScheme.Clamp(_saveCache.controlScheme));
+                controlSchemeDropdown.RefreshShownValue();
+                // 조작 방식은 게임 시작 전에만 선택 가능 — 인게임 ESC 오버레이로 열렸으면 잠근다.
+                controlSchemeDropdown.interactable = PauseResumeHandler == null;
+                controlSchemeDropdown.onValueChanged.AddListener(OnControlSchemeChanged);
             }
 
             if (aimGuideToggle != null)
@@ -268,27 +268,6 @@ namespace BowlingGame
                 colorblindDropdown.RefreshShownValue();
                 colorblindDropdown.onValueChanged.AddListener(OnColorblindChanged);
             }
-        }
-
-        private void BindMiscTab()
-        {
-            if (cameraPresetDropdown == null) return;
-
-            cameraPresetDropdown.ClearOptions();
-            // 인덱스 = SaveData.cameraPreset — 목록 순서는 CameraPreset.Presets 와 1:1.
-            cameraPresetDropdown.AddOptions(new List<string>(CameraPreset.Labels));
-            cameraPresetDropdown.SetValueWithoutNotify(CameraPreset.Clamp(_saveCache.cameraPreset));
-            cameraPresetDropdown.RefreshShownValue();
-            cameraPresetDropdown.onValueChanged.AddListener(OnCameraPresetChanged);
-
-            if (laneWidthDropdown == null) return;
-
-            laneWidthDropdown.ClearOptions();
-            // 인덱스 = SaveData.laneWidthPreset — 목록 순서는 LaneWidthPreset.Presets 와 1:1.
-            laneWidthDropdown.AddOptions(new List<string>(LaneWidthPreset.Labels));
-            laneWidthDropdown.SetValueWithoutNotify(LaneWidthPreset.Clamp(_saveCache.laneWidthPreset));
-            laneWidthDropdown.RefreshShownValue();
-            laneWidthDropdown.onValueChanged.AddListener(OnLaneWidthChanged);
         }
 
         // ---------- 탭 전환 ----------
@@ -384,14 +363,14 @@ namespace BowlingGame
             Debug.Log($"{LogPrefix} 조준 음향 가이드 {(on ? "ON" : "OFF")}");
         }
 
-        // 커브볼 조작 토글 — 게임 측 반영은 PowerGaugeUI 가 AimingPower 진입 시 SaveSystem.Load 로
-        // 캐싱하는 방식이므로 여기서는 저장만 하면 된다 (다음 세기 결정 단계부터 적용).
-        private void OnSpinControlChanged(bool on)
+        // 조작 방식 — 저장만 한다. BallAimer 가 게임 씬 로드 시 1회 읽으므로
+        // 진행 중인 게임에는 영향이 없고 다음 게임부터 적용된다.
+        private void OnControlSchemeChanged(int idx)
         {
             if (_initializingUI) return;
-            _saveCache.spinControlEnabled = on;
+            _saveCache.controlScheme = ControlScheme.Clamp(idx);
             SaveSystem.Save(_saveCache);
-            Debug.Log($"{LogPrefix} 커브볼 조작 {(on ? "ON — 조준 3단계 (위치→세기→회전)" : "OFF — 조준 2단계 (위치→세기, 직구)")}");
+            Debug.Log($"{LogPrefix} 조작 방식 = {ControlScheme.Labels[_saveCache.controlScheme]} (다음 게임부터 적용)");
         }
 
         // 예상 경로 가이드 토글 — 게임 측 반영은 AimGuide 가 AimingPosition 진입 시 SaveSystem.Load 로
@@ -411,30 +390,6 @@ namespace BowlingGame
             SaveSystem.Save(_saveCache);
             // 실제 셰이더/머티리얼 보정은 추후 업데이트 — 현재는 선택값 저장만.
             Debug.Log($"{LogPrefix} 색맹 모드 = {_saveCache.colorblindMode} (실제 적용은 추후 업데이트)");
-        }
-
-        // ---------- 기타 핸들러 ----------
-
-        // 카메라 시점 프리셋 — 저장 후 즉시 적용한다. 게임 씬이 로드돼 있지 않으면
-        // CameraPreset.Apply 가 조용히 무시하고, 다음 게임 씬 진입 시 CameraFollow.Start 가 반영한다.
-        private void OnCameraPresetChanged(int idx)
-        {
-            if (_initializingUI) return;
-            _saveCache.cameraPreset = CameraPreset.Clamp(idx);
-            SaveSystem.Save(_saveCache);
-            CameraPreset.Apply(_saveCache.cameraPreset);
-            Debug.Log($"{LogPrefix} 카메라 시점 = {CameraPreset.Presets[_saveCache.cameraPreset].Label}");
-        }
-
-        // 레인 가로 폭 프리셋 — 저장만 하고 즉시 적용하지 않는다.
-        // 투구 중 레인이 넓어지면 굴러가던 공과 쓰러지던 핀이 순간이동하므로,
-        // 적용은 다음 게임 씬 로드 시 LaneWidthSetter.Awake 가 한 번만 수행한다.
-        private void OnLaneWidthChanged(int idx)
-        {
-            if (_initializingUI) return;
-            _saveCache.laneWidthPreset = LaneWidthPreset.Clamp(idx);
-            SaveSystem.Save(_saveCache);
-            Debug.Log($"{LogPrefix} 레인 폭 = {LaneWidthPreset.Presets[_saveCache.laneWidthPreset].Label} (다음 게임부터 적용)");
         }
 
         // ---------- 헬퍼 ----------

@@ -202,7 +202,8 @@ namespace BowlingGame
             var record = HighScoreService.Record(ruleConfig.ModeName, ruleConfig.FrameCount, score);
 
             // 결과를 다음 씬으로 전달.
-            GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName, record.BestScore, record.IsNewRecord);
+            // 프레임별 결과까지 함께 넘긴다 — 결과 화면이 최종 스코어보드를 그리는 유일한 출처.
+            GameResultHolder.Instance.SetResult(score, ruleConfig.ModeName, record.BestScore, record.IsNewRecord, frameManager.GetFrames());
 
             // 마지막 투구의 스트라이크/스페어/거터 연출(이미지)이 재생 중이면 끝까지 보여준 뒤 결과 화면으로 전환한다.
             // (보이스는 AudioManager 가 DontDestroyOnLoad 라 씬 전환 후에도 끊기지 않고 이어서 재생됨)

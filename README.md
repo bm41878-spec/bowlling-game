@@ -935,12 +935,304 @@ M  ProjectSettings/EditorBuildSettings.asset
 
 **부수 변경 (요청 범위 밖, 의도적)**: 설정 드롭다운 5개(해상도·창모드·색맹·카메라 시점·레인 폭) 의 선택값/항목 글자 크기를 **14pt → 28pt** 로 올렸다. 행 라벨이 36pt 인데 선택값이 14pt 라 무엇이 선택됐는지 읽기 어려웠다. 새로 만든 두 행만 키우면 기존 탭과 어긋나므로 전부 통일했다.
 
+### 14-25. 후속 세션 변경 (2026-11-14) — QA 발견 결함 4건 수정
+
+2026-11-08 플레이테스트/설정조합 QA 에서 나온 지적 사항을 모두 처리했다.
+
+**① `SaveSystem` 메모리 캐시 — 성능 + 데이터 유실 양쪽 해결**
+
+| | |
+|---|---|
+| 증상 | 상태 전이마다 `Load()` 2회씩, 한 게임에 수십 번 파일 I/O + JSON 파싱 |
+| 수정 | `SaveSystem._cache` 추가. `Load()` 는 캐시가 있으면 그대로 반환하고, `Save()` 가 저장한 인스턴스로 캐시를 갱신. 실제 저장소 접근은 `LoadFromStorage()` 로 분리. `InvalidateCache()` 공개 |
+
+**더 중요한 부수 효과** — 이 캐시는 실제 데이터 유실 버그를 없앤다. 기존에는 `Load()` 가 매번 새 인스턴스를 만들었고, `SettingsUI._saveCache` 는 씬 수명 내내 그 스냅샷을 들고 있다가 토글 하나 바꿀 때마다 통째로 `Save` 했다. `HighScoreService.Record` 도 독립적으로 Load→수정→Save 를 한다. 두 사이클이 겹치면 **나중에 저장한 쪽이 상대의 변경을 되돌린다.** QA 중 실제로 설정값이 이전 조합으로 되돌아간 것을 관측했고(`cameraPreset`/`laneWidthPreset` 만 과거 값으로 복귀), 캐시 도입 후 동일 시나리오에서 두 번째 `Save` 가 첫 번째 변경을 보존하는 것을 확인했다. §7-29-a 등재.
+
+**② 폐기된 `ResultUI` 제거**
+
+`Game.unity` Canvas 에 남아 있던 `ResultUI` 컴포넌트를 제거하고 `Assets/Scripts/UI/ResultUI.cs` 를 삭제했다. 2026-06-19 에 결과 화면이 별도 씬(`Gameover_scene` + `GameOverUI`)으로 분리되면서 폐기됐으나 컴포넌트가 잔존해, 게임 씬 로드마다 `[Result] panelRoot 참조 누락` 경고를 찍고 있었다. 코드 참조처는 `GameOverUI` 의 설명 주석 한 줄뿐이라 삭제에 영향 없음 (주석은 "폐기됨" 표기로 갱신). 씬에 미싱 스크립트 컴포넌트가 남지 않은 것을 확인했다.
+
+**③ 투구 중 카메라 프리셋 변경 시 순간이동**
+
+`CameraFollow.ApplyPreset` 이 무조건 카메라를 조준 위치로 옮기고 `mode = Idle` 로 만들어, 공이 굴러가는 중에 설정을 바꾸면 그 투구의 추적이 끊겼다 (ESC 일시정지는 Rolling 중에도 가능). `mode == Following` 이면 **거리값만 갱신하고 위치·모드는 건드리지 않도록** 수정. 다음 `LateUpdate` 부터 새 프리셋 기준으로 부드럽게 이어간다.
+
+**④ 핀을 맞힌 뒤의 거터 진입을 거터로 집계하던 문제**
+
+`BowlingBall.Update` 의 거터 폴링에 `hasPlayedPinHitThisThrow` 가드를 추가했다. 거터볼은 "핀에 닿지 못하고 도랑으로 빠진 공"인데, 핀을 맞고 튕겨 나간 공까지 거터 진입으로 기록돼 로그가 오해를 불렀다.
+
+⚠️ **규칙이 미세하게 바뀐다**: 핀을 스쳤지만 **0개를 쓰러뜨리고** 거터로 빠진 투구는 이제 거터 판정(`OnGutterBall` → 거터 보이스/연출)이 나지 않는다. 기존에는 "거터 진입 + 0핀" 이라 판정이 났다. "핀에 닿았으면 거터가 아니다" 가 더 정확하다고 보아 의도적으로 바꿨다.
+
+**검증 (Play 모드, 리플렉션으로 분기 직접 확인)**
+- 캐시: 5회 `Load` 모두 동일 인스턴스, `Save` 후에도 동일. 두 사이클 덮어쓰기 재현 시 변경 보존 확인
+- 카메라: `mode=Following` 에서 `Apply` → 위치 불변 + FOV 적용 / `mode=Idle` 에서 `Apply` → 새 위치 적용
+- 거터: 핀 접촉 후 거터 진입 → 미집계 / 핀 미접촉 거터 진입 → 정상 집계
+- 씬 로드 시 프리셋 A 적용(FOV 30, (0,2.1,−3.2)) + 레인폭 A(−0.625) + 미싱 스크립트 0건
+
+**부수 발견**: Unity 에디터가 백그라운드일 때는 플레이어 루프가 거의 멈춰 `Time.frameCount` 가 증가하지 않는다. `BallAimer.OnConfirmInput` / `PowerGaugeUI` 의 `Time.frameCount == enteredFrame` 가드가 영구히 참이 되어 입력이 먹지 않는 것처럼 보인다. 에디터에서 자동화 테스트를 돌릴 때는 `Application.runInBackground = true` 를 먼저 켤 것.
+
+### 14-26. 후속 세션 변경 (2026-11-14) — 조작 방식 A/B/C + C(호 조준, 1번 입력)
+
+**동기**: 조준 입력 횟수를 고를 수 있게. 기존 2단계/3단계를 목록으로 묶고, **1번 입력으로 끝나는 C 방식**을 추가.
+
+| 방식 | 입력 | 구성 |
+|---|---|---|
+| **A** (기본) | 2번 | 위치 → 세기 |
+| **B** | 3번 | 위치 → 세기 → 커브 |
+| **C** | **1번** | **방향만** — 고정 세기, 커브 없음 |
+
+**C 방식 동작** — 공은 레인 중앙에 고정되고, **공을 중심으로 조준선이 호를 그리며 좌우로 왕복**한다. 1회 입력으로 그 방향이 확정되고 즉시 발사된다. 세기는 고정값, 커브 없음, 발사 후에는 관성으로만 굴러간다.
+
+| 파라미터 | 값 | 비고 |
+|---|---|---|
+| `arcHalfAngleDegrees` | 7° | 레인 가장자리가 약 3.7°, 거터가 약 3.9° — 이보다 커야 빗나갈 여지가 생긴다. 레인 폭 프리셋이 배율을 곱한다 |
+| `arcSweepSpeed` | 1.6 | 한 왕복 2.5초 (`4 / 값`) |
+| `fixedPower` | 0.65 | `minForce`~`maxForce` 보간 → 힘 14.5 |
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Settings/ControlScheme.cs` | **신규.** 상수 3개 + `Labels` + `Clamp` / `UsesSpinStage` / `IsSingleInput`. 조작 방식의 단일 출처 |
+| `Assets/Scripts/Persistence/SaveData.cs` | `controlScheme` (int, 기본 0=A) 추가 |
+| `Assets/Scripts/Persistence/SaveSystem.cs` | `NormalizeControlScheme` — 구 `spinControlEnabled`(bool) → `controlScheme`(int) 1회 마이그레이션 (켜져 있었으면 B) |
+| `Assets/Scripts/Gameplay/BallAimer.cs` | C 방식 분기 — 공은 중앙 고정, `currentAimAngle` 을 호로 왕복. `ConfirmedDirection` / `SingleInputAiming` / `UsesFixedPower` / `FixedPower` / `CurrentAimDirection` 공개. 확정 시 `AimingPower` 를 건너뛰고 바로 `Rolling` |
+| `Assets/Scripts/Gameplay/BowlingBall.cs` | `Launch(startPos, force, direction)` 오버로드 — 임펄스를 조준 방향으로. `ExecuteLaunch` 가 C 방식이면 고정 세기 사용 |
+| `Assets/Scripts/UI/PowerGaugeUI.cs` | 커브 단계 분기를 `ControlScheme.UsesSpinStage` 로 전환 |
+| `Assets/Scripts/Gameplay/AimGuide.cs` | 조준 방향을 따라 경로를 그리도록 수정. C 방식에서는 **가이드 강제 ON** |
+| `Assets/Scripts/UI/SettingsUI.cs` | `spinControlToggle`(Toggle) → `controlSchemeDropdown`(TMP_Dropdown). 인게임 오버레이에서는 비활성화 |
+| `Assets/Scenes/settings.unity` | 접근성 탭의 `Row_SpinControl` 제거 → `Row_ControlScheme` (Label "조작 방식" + 드롭다운 3항목) 같은 자리에 생성·배선 |
+
+**게임 시작 전에만 변경 가능** — 두 겹으로 보장한다.
+1. `BallAimer.Start` 가 씬 로드 시 1회만 읽는다. 투구 도중 단계 구성이 바뀌면 상태 머신이 중간 상태에 갇히기 때문
+2. 인게임 ESC 오버레이에서는 드롭다운을 잠근다 (`PauseResumeHandler != null`)
+
+**가이드 강제 ON (C 방식)**: 조준선이 보이지 않으면 어느 방향으로 굴릴지 알 방법이 없어 조작 방식 자체가 성립하지 않는다. 거터 영역에 닿으면 선이 잘려 "이대로 누르면 빗나간다" 가 보인다.
+
+**검증 (Play 모드, 세 방식 모두 end-to-end)**
+- **A**: `AimingPosition → AimingPower → Rolling` (2번), 확정 방향 `(0,0,1)` 정면, 가이드 설정대로 OFF
+- **B**: `AimingPosition → AimingPower → AimingSpin → Rolling` (3번), 커브 게이지 활성, 확정 회전 −0.068
+- **C**: `AimingPosition → Rolling` (1번), 공 x=0 고정, 호 각도 7° 범위 왕복, 가이드 강제 ON + 거터 절단 확인, 실제 투구로 핀 1개 쓰러뜨리고 2구 진행
+- `Clamp(99)` / `Clamp(-1)` → 0 (A), 컴파일 에러 0
+
+**미구현**: 스케치의 **화살표 모양 UI** 는 만들지 않았다. 현재는 기존 예상 경로선(LineRenderer)이 조준 방향을 표시한다. 공 아래에 호를 따라 도는 화살표 스프라이트가 필요하면 별도 작업.
+
+### 14-27. 후속 세션 변경 (2026-11-14) — C 방식 조준 화살표 + 가이드선이 레인에 묻혀 있던 버그
+
+**① 조준 화살표 (`AimArrow`) 신규**
+
+조작 방식 C 에서 스케치대로 **공을 중심으로 호를 도는 블록 화살표**를 레인 위에 그린다. 아트 에셋 없이 런타임에 메시를 생성한다 (정점 7개 / 삼각형 6개, 양면).
+
+| 항목 | 값 | 비고 |
+|---|---|---|
+| `orbitRadius` | 0.5 | 공에서 화살표 꼬리까지. 카메라 프리셋 A 기준 화면 아래 끝이 z≈0 이라 0.55 를 넘으면 화면 밖으로 나간다 |
+| `arrowY` | 0.055 | 레인 윗면(0.05) 바로 위 |
+| 몸통 / 머리 반폭 | 0.055 / 0.135 | 머리 폭 0.27 ≈ 레인 폭의 27% |
+| 몸통 / 머리 길이 | 0.24 / 0.18 | 전체 0.42 |
+
+배치 규칙 — 화살표는 **공 뒤쪽** 호 위에 서서 공을 관통하는 방향을 가리킨다. 조준각 θ 일 때 위치는 `공 − dir(θ) × orbitRadius`, 회전은 `LookRotation(dir(θ))`. A/B 방식에서는 숨는다.
+
+**⚠ 공의 자식으로 붙이면 안 된다** — `BowlingBall` 의 `localScale` 이 **10** 이라 자식이 10배로 커진다 (처음 구현에서 레인 전체를 덮는 크기로 나왔다). 그래서 메시 오브젝트는 부모 없이 씬 루트에 만들고 매 프레임 월드 좌표를 직접 세팅하며, `OnDestroy` 에서 직접 정리한다.
+
+**② 예상 경로선이 레인 속에 묻혀 있던 버그 수정**
+
+`AimGuide.lineY` 가 **0.03** 인데 **레인 윗면은 y=0.05** 다. 즉 2026-07-09 에 추가된 예상 경로선은 **줄곧 레인 안쪽에 그려져 한 번도 보이지 않았다.** 기본값이 OFF 라 아무도 눈치채지 못했다.
+
+| | 전 | 후 |
+|---|---|---|
+| `AimGuide.lineY` | 0.03 | **0.055** |
+| `AimArrow.arrowY` | 0.03 | **0.055** |
+
+스크립트 기본값과 `Game.unity` 직렬화 값을 모두 갱신했다. 레인 윗면 높이(0.05) 는 `Lane_Root/Lane*` 렌더러 bounds 로 측정한 값이다.
+
+| 파일 | 변경 |
+|---|---|
+| `Assets/Scripts/Gameplay/AimArrow.cs` | **신규.** 블록 화살표 메시 생성 + 호 추적. `ApplyWidthScale` 로 레인 폭 연동 |
+| `Assets/Scripts/Gameplay/AimGuide.cs` | `lineY` 0.03 → 0.055 |
+| `Assets/Scripts/Settings/LaneWidthPreset.cs` | `Apply` 에 `AimArrow.ApplyWidthScale` 호출 추가 |
+| `Assets/Scenes/Game.unity` | `BowlingBall` 에 `AimArrow` 부착 + `aimer` 배선, `lineY`/`arrowY` 0.055 |
+
+**검증 (Play 모드)**: C 방식에서 공 아래 노란 화살표가 호를 따라 회전하는 것과, 흰색 예상 경로선이 레인 위에 처음으로 보이는 것을 스크린샷으로 확인 (`Assets/Screenshots/aim_arrow_C4.png`, `C5.png`). 화살표 위치가 공에서 정확히 `orbitRadius` 만큼 떨어진 호 위에 있고 회전각이 조준각과 일치함을 수치로 확인. 컴파일 에러 0.
+
+### 14-28. 후속 세션 변경 (2026-11-18) — 크기 ×1.2 고정 + 레인폭·카메라 프리셋 설정 제거
+
+**배경**: "레인이 좁아 보인다"는 의견에 레인 폭 프리셋(A/B/C)을 넣었으나, 폭만 늘리면 **핀 간격도 같이 벌어져 피격 판정이 깨졌다**. ×1.5 에서 핀 사이 빈 틈이 0.353m 로 공(0.20m)보다 1.75배 넓어져 **공이 핀 사이를 그대로 통과**했다 — 실제 볼링에서는 불가능한 일이다.
+
+결론: 의도는 "전체가 비례해서 커 보이는 것"이었으므로, **×1.2 를 씬에 고정**하고 설정은 없앤다.
+
+**적용 — 균일 ×1.2, 단 투구 거리는 고정**
+
+| 대상 | 처리 |
+|---|---|
+| 투구 거리 (스폰 z=0.5 → 헤드핀 z=8.267) | **7.767m 고정** — 투구 시간·카메라 불변 |
+| 레인 바닥 · 거터 · 벽 | x 위치·x 스케일 ×1.2 |
+| 핀 랙 **내부** 간격 (x·z 모두) | ×1.2 — 헤드핀은 로컬 원점이라 제자리, 뒷줄만 8.72 → 8.81 |
+| 핀 크기 | 균일 ×1.2 (localScale 9 → 10.8, 두께 0.106 → 0.128) |
+| 공 크기 | ×1.2 (localScale 10 → 12, 지름 0.20 → 0.239) |
+| 공 스폰 높이 | 0.15 → **0.17** (반지름 0.10→0.12 만큼. 안 올리면 레인에 박힘) |
+| **질량** | **변경 없음** — 공 9 lb(4.0823kg), 핀 3.5 lb(1.5876kg). 비율 2.57 유지라 타격감 불변, 발사 힘(16.33~32.66)도 불변 |
+
+**검증된 비율 보존**
+```
+같은 줄 핀 간격 0.367 − 두께 0.128 = 빈 틈 0.240   vs 공 지름 0.239  ✓ 공이 핀 사이를 못 지나감
+앞뒤 행 간격   0.180 − 두께 0.128 = 빈 틈 0.052   (이전 0.044 보다 여유)  ✓ 스폰 시 끼임 없음
+```
+
+**폭 연동 상수도 씬에 고정** — `BallAimer.laneHalfWidth` 0.43 → **0.516**, `BallAimer.arcHalfAngleDegrees` 7 → **8.4**, `BowlingBall.gutterX` / `AimGuide.gutterX` 0.533 → **0.6396**. 런타임 배율이 아니라 직렬화 값이다.
+
+**`AimArrow` 는 의도적으로 안 키웠다** — `orbitRadius` 를 1.2배(0.6)로 하면 카메라 A 기준 화면 아래 끝(z≈0)을 벗어나 화살표가 잘린다. 월드 지오메트리가 아니라 표시 요소라 현재 값 유지.
+
+**수용한 트레이드오프**: 중력은 9.81 m/s² 그대로라 크기 대비 핀이 약간 느리게 넘어진다. 사용자 확인 후 수용.
+
+**삭제한 것**
+
+| 대상 | 비고 |
+|---|---|
+| `Assets/Scripts/Settings/LaneWidthPreset.cs` | 삭제 |
+| `Assets/Scripts/Gameplay/LaneWidthSetter.cs` | 삭제. `Lane_Root` 에서 컴포넌트 제거 |
+| `Assets/Scripts/Settings/CameraPreset.cs` | 삭제. 카메라는 **A값 고정** (FOV 30, (0,2.1,−3.2), 피치 18.5°) |
+| `SaveData.cameraPreset` / `laneWidthPreset` | 필드 제거. save.json 의 잔여 키도 재저장으로 정리 |
+| `SettingsUI` 의 두 드롭다운 + 핸들러 + `BindMiscTab` | 제거 |
+| `SettingsApplier.ApplyCamera` | 제거 |
+| `CameraFollow.ApplyPreset` | 제거. `Start` 는 씬 값 그대로 쓰고 `initialPosition` + `RecomputeStopZ()` 만 수행 |
+| `ApplyWidthScale` (BallAimer / BowlingBall / AimGuide / AimArrow) | 호출자가 사라져 전부 제거 |
+| `settings.unity` 의 `Row_CameraPreset` / `Row_LaneWidth` | 제거. **"기타" 탭이 비어 `Tab_UX` 버튼을 숨김** |
+
+**검증 (Play 모드)**: 공 지름 0.239 / 질량 4.082kg / 바닥 y 0.050(레인면 일치), 카메라 FOV 30 · (0,2.10,−3.20), `laneHalfWidth` 0.516 · 호 8.40°, **핀 10개 정상 기립**(스폰 끼임 없음), 미싱 스크립트 0, 실제 투구 1회 정상 진행(3핀). 컴파일 에러 0.
+
+**미완료**: 없음. 항목 3(스코어보드 좌측 세로)은 §14-29, 항목 2(결과 화면 스코어보드)는 §14-30 에서 완료. 두 절에서 남겨 둔 폰트 번짐 문제는 §14-31 에서 해결.
+
+### 14-29. 후속 세션 변경 (2026-11-19) — 항목 3: 인게임 스코어보드 좌측 세로 배치
+
+**문제**: 스코어보드가 화면 **상단 가로 띠**(`ScoreboardTop`, 높이 200)로 배치돼 있어 **핀 덱을 가렸다**. 카메라가 핀을 화면 위쪽에 잡기 때문에 띠와 핀이 같은 영역을 놓고 다툰다.
+
+**해결**: 스코어보드를 화면 **좌측 세로 컬럼**으로 옮기고, 프레임 카드를 **가로 1행(row)** 형태로 바꿨다. 레인은 화면 중앙~우측을 쓰므로 좌측은 원래 비어 있던 공간이다.
+
+**새 C# 코드는 없다.** `ScoreboardLayoutRenderer` 추상도, `CardLayoutRenderer` 구현체도 그대로다. 렌더러의 책임은 "프리팹을 컨테이너에 frameCount 개 찍고 `FrameCardUI` 를 호출한다" 뿐이므로, **프리팹과 컨테이너의 레이아웃 그룹만 바꾸면** 세로 배치가 된다. (§7-23 "layout 필드는 추상 타입 유지" 원칙과 충돌하지 않는다 — 구현체를 바꾼 게 아니라 데이터를 바꿨다.)
+
+| | 기존 | 변경 |
+|---|---|---|
+| 컨테이너 | `ScoreboardTop` — 상단 stretch, 높이 200 | **`ScoreboardLeft`** — 좌측 세로, 폭 300, 상하 여백 24 |
+| 레이아웃 그룹 | `HorizontalLayoutGroup` | **`VerticalLayoutGroup`** (`childControlHeight = false`) |
+| 프레임 프리팹 | `FrameCard.prefab` 140×180 세로 카드 | **`FrameRow.prefab` 300×76 가로 행** (신규) |
+| 행 내부 구성 | 번호 / 투구 / 점수 **세로** 스택 | 번호(56) / 투구(flex) / 합계(86) **가로 3열** |
+| 총점 패널 | 띠 우측 | 컬럼 하단. 라벨 `TOTAL` → **`총점`** |
+| 현재 프레임 라벨 | 화면 좌하단 (새 컬럼과 충돌) | 컬럼 하단, 총점 패널 바로 위 |
+| 컬럼 배경 | 없음 | `ColumnPanel` (Image, 검정 alpha 0.55) |
+| 헤더 | 없음 | `Header` — 행과 같은 3열 (`프레임` / `투구` / `합계`) |
+
+**행 높이는 10행 기준으로 고정했다.** `RowContainer` 는 `76px × 10행 + 4px × 9간격 = 796px` 고정 높이에 **위쪽 정렬**(UpperCenter)이고, `childControlHeight = false` 라 행이 남는 공간을 먹고 늘어나지 않는다. 따라서 **5프레임 쇼트 모드에서는 위 절반(396px)만 차고 아래는 빈다** — 사용자가 지정한 동작이다. 프레임 수가 바뀌어도 한 행의 크기·글자 크기가 그대로라 시각적 일관성이 유지된다.
+
+```
+컬럼 높이 1032  (1080 − 상하 여백 24×2)
+  8   Header (34)
+ 50   RowContainer 시작
+846   RowContainer 끝 (10행 기준)   ← 5프레임이면 446 에서 끝남
+870   CurrentFrameLabel 상단        → 10프레임에서도 24px 여유, 겹치지 않음
+922   TotalScorePanel 상단 (높이 100)
+```
+
+**검증 (Play 모드, 1920×1080 기준)**: 5프레임 모드에서 행 5개가 각각 284×76 으로 생성되고 396px (컨테이너의 정확히 절반) 점유. 실제 `FrameManager` 이벤트 경로로 스트라이크 / 일반 / 스페어 / 0+9 를 기록해 `X -` 15 / `7 2` 24 / `8 /` 37 / `0 9` 46 과 총점 46, 현재 프레임 강조 이동까지 확인. `CardLayoutRenderer.Initialize(10)` 로 10프레임 레이아웃도 846px 에서 끝나 라벨과 겹치지 않음을 확인. **핀 덱과 레인 전체가 가려지지 않는다.**
+
+**남은 사항 — 폰트 에셋 품질 (스코어보드와 무관한 전역 문제)**: `NotoSansKR-Black SDF` 가 `samplingPointSize = 16`, `atlasPadding = 0` 으로 구워져 있다. 16px 글리프를 26~46pt 로 확대해 쓰는 셈이라 글자가 흐리고, 패딩이 0 이라 아틀라스에서 이웃 글리프가 새어 들어와 숫자 위아래에 가는 선이 보인다(스크린샷의 `37`, `8` 위 얼룩). 샘플링 ~90 / 패딩 9 로 재생성하면 게임 전체 텍스트가 선명해지지만 **모든 씬의 줄바꿈·크기를 다시 확인해야** 하므로 별도 작업으로 남긴다. 이번 변경이 만든 문제가 아니라 기존부터 있던 것이다.
+
+**후속**: 항목 2(결과 화면에 최종 스코어보드 표시)는 §14-30 에서 완료.
+
+### 14-30. 후속 세션 변경 (2026-11-19) — 항목 2: 결과 화면에 최종 스코어보드
+
+**요구**: `Gameover_scene` 은 유지하되, 큰 총점 숫자 하나만 띄우지 말고 **최종 스코어보드 전체**를 보여준다. `최고 점수` / `신기록!` 표시는 삭제하되 **데이터 수집은 유지**(추후 리더보드용). `메인메뉴` / `게임종료` 버튼은 기존 것을 그대로 쓴다.
+
+**핵심 문제 — 씬이 갈리면 FrameManager 가 없다.** 인게임 `ScoreboardUI` 는 `FrameManager` 의 5개 이벤트를 실시간 구독해 그린다. 결과 화면은 별도 씬이라 FrameManager 인스턴스가 이미 파괴돼 있어 **사후 조회가 불가능**하다. 그래서 프레임별 결과를 씬 경계 너머로 **스냅샷으로 넘긴다**.
+
+| 계층 | 변경 |
+|---|---|
+| `FrameManager.GetFrames()` | 신설 — 이 게임의 `Frame` 목록 (`IReadOnlyList<Frame>`) |
+| `GameResultHolder.LastFrames` | 신설 — 스냅샷 보관. `SetResult` 에 `frames` 인자 추가 (DontDestroyOnLoad 싱글턴이라 씬 전이에도 살아남음) |
+| `GameManager.OnEnterGameOver` | `SetResult(..., frameManager.GetFrames())` 로 스냅샷 동봉 |
+| **`FinalScoreboardUI`** (신설) | `Assets/Scripts/UI/FinalScoreboardUI.cs` — 스냅샷을 읽어 `ScoreboardLayoutRenderer` 에 **1회 재생** |
+| `GameOverUI` | **버튼만 담당**하도록 축소. `gameOverScoreText`/`bestScoreText`/`newRecordText` 필드와 `ApplyBestScore` 제거 |
+
+**Frame 은 복사하지 않고 인스턴스를 그대로 넘긴다** — `Frame` 의 setter 가 `internal` (`Bowling.Domain` 전용)이라 UI 어셈블리에서 복사본을 만들 수 없기 때문이다. 안전한 이유: `FrameManager.Initialize` 가 매 게임 `new List<Frame>` + `new Frame()` 로 새로 만들어서, **끝난 게임의 Frame 은 재시작해도 건드려지지 않는다**. 목록 자체는 `GameResultHolder` 에서 복사한다.
+
+**렌더러는 인게임과 같은 것을 재사용한다.** 새 레이아웃 렌더러를 만들지 않았다 — `CardLayoutRenderer` 하나를 두 화면이 공유하고, **배치 차이는 컨테이너의 레이아웃 그룹과 프리팹이 만든다**.
+
+| | 인게임 | 결과 화면 |
+|---|---|---|
+| 데이터 | `FrameManager` 이벤트 실시간 구독 | `GameResultHolder` 스냅샷 1회 재생 |
+| 컨테이너 | `RowContainer` — VerticalLayoutGroup | `ScoreboardRow` — HorizontalLayoutGroup |
+| 프리팹 | `FrameRow.prefab` 300×76 | `FrameCard.prefab` **340×380** (크게 재조정) |
+| 위치 | 화면 좌측 세로 컬럼 | 화면 **중앙 가로** |
+
+**`FrameCard.prefab` 재조정**: 140×180 → 340×380, 자식 TMP 3개에 **자동 글자 크기**(min 16~20 / max 44·110·86) 적용. 자동 크기가 필요한 이유는 프레임 수에 따라 카드 폭이 달라지기 때문 — 5프레임이면 카드 1개 347px, 10프레임이면 166px 로 같은 컨테이너(1800px)를 나눠 쓴다. `LayoutElement` 가 `minWidth 120 / preferredWidth 340 / flexibleWidth 1` 이라 **10프레임도 넘치지 않는다** (검증: 합계 정확히 1800px).
+
+**결과 화면 구성** (anchor=center 기준 y):
+```
+Title            y=+360  "{모드명} 결과" 76pt      ← FinalScoreboardUI.titleLabel
+ScoreboardRow    y=+80   1800×390 가로 그룹        ← CardLayoutRenderer.cardContainer
+Mainmenu_button  y=-280  (기존 버튼 그대로)
+Quit_button      y=-395  (기존 버튼 그대로, WebGL 에선 숨김)
+```
+
+**최종 점수는 마지막 카드의 누적 점수**다 — 별도의 큰 총점 숫자는 두지 않았다 ("총점만 띄우지 않는다" 요구 반영).
+
+**데이터 수집은 그대로다**: `HighScoreService.Record(...)` 호출, `GameResultHolder.LastBestScore` / `IsNewRecord` 모두 유지. 화면에 안 띄울 뿐이다.
+
+**검증 (Play 모드, end-to-end)**: Game 씬에서 5프레임을 실제 `FrameManager` 경로로 진행(X / 7·2 / 8·스페어 / 0·9 / 6·스페어 = 59점) → `OnEnterGameOver` → `Gameover_scene` 자동 로드 → 카드 5장이 `X -` 15 / `7 2` 24 / `8 /` 37 / `0 9` 46 / `6 /` 59 로 표시, 제목 "쇼트 모드 결과", 메인메뉴 버튼 클릭 시 `mainmenu` 로 전환까지 확인. `CardLayoutRenderer.Initialize(10)` 로 풀 모드 폭도 확인. 에러·경고 0건. 검증 중 생긴 최고점 기록은 save.json 백업/복구로 되돌렸다 (기존 13건 유지).
+
+**알려진 문제 (이번 변경과 무관, §14-29 에서 이미 기록)**: `NotoSansKR-Black SDF` 가 `samplingPointSize = 16` / `atlasPadding = 0` 으로 구워져 있어, **결과 화면처럼 글자를 크게 쓸수록 아틀라스 글리프 번짐이 뚜렷해진다** (숫자 위 가는 선). 인게임 30pt 에서는 희미했지만 결과 화면 110pt 에서는 눈에 띈다. 폰트 에셋 재생성이 근본 해결이며 전 씬 재확인이 필요해 별도 작업으로 남겨 둔다.
+
+### 14-31. 후속 세션 변경 (2026-11-20) — 폰트 에셋 Static → Dynamic 전환
+
+**증상**: 숫자·글자 위아래에 가는 선이 비치고 전체적으로 흐릿했다. 결과 화면처럼 글자를 크게 쓸수록 심해졌다 (§14-29, §14-30 에서 기록).
+
+**원인**: `NotoSansKR-Black SDF` 가 이렇게 구워져 있었다.
+
+| | 값 | 문제 |
+|---|---|---|
+| `atlasPopulationMode` | **Static** | 글리프가 미리 구워져 고정 |
+| `samplingPointSize` | **16** | 16px 로 구운 글리프를 26~110pt 로 확대 → 흐릿함 |
+| `atlasPadding` | **0** | 글리프 사이 여백이 없어 **이웃 글리프가 새어 들어옴** → 숫자 위 가는 선 |
+| 아틀라스 | 4096×4096 Alpha8 | 한글 음절 11,172자 전부 포함 |
+| 에셋 파일 | **47.9 MB** | |
+
+**16pt 는 실수가 아니라 타협이었다.** 한글 음절 11,172자를 4096×4096 한 장에 정적으로 넣으려면 글리프당 약 25px 가 한계다. 그래서 "90pt 로 다시 구우면 된다" 는 통하지 않는다 — 같은 아틀라스에 11,172자가 안 들어간다.
+
+**해결 — Dynamic 전환.** 쓰는 글자만 런타임에 구우면 11,172자를 미리 넣을 이유가 없어지고, 샘플링 크기를 마음껏 올릴 수 있다.
+
+| | 변경 후 |
+|---|---|
+| `atlasPopulationMode` | **Dynamic** (`sourceFontFile` = `NotoSansKR-Black.ttf`) |
+| `samplingPointSize` | 16 → **90** |
+| `atlasPadding` | 0 → **9** (머티리얼 `_GradientScale` = padding+1 = **10**) |
+| 아틀라스 | 4096×4096 → **2048×2048**, 멀티 아틀라스 허용 |
+| 에셋 파일 | 47.9 MB → **8.4 MB** |
+
+**GUID·fileID 를 보존했다** — 에셋을 새로 만들어 교체하지 않고 **기존 에셋을 제자리에서 수정**했다. 새로 만들었다면 폰트 에셋 GUID 는 물론 머티리얼 서브에셋의 fileID(`-541273331307260562`) 까지 바뀌어, 모든 씬·프리팹의 TMP 텍스트가 폰트와 머티리얼 참조를 전부 잃는다. 절차:
+
+1. `TMP_FontAsset.CreateFontAsset(ttf, 90, 9, SDFAA, 2048, 2048, Dynamic, true)` 로 **메모리에만** 올바른 메트릭을 가진 임시 에셋 생성
+2. `SerializedObject.CopyFromSerializedProperty` 로 `m_FaceInfo` 를 기존 에셋에 이식 (lineHeight 23.168 → 130.32 등 — 이걸 빼먹으면 16pt 메트릭으로 90pt 글리프를 배치해 글자가 겹친다)
+3. 나머지 설정값(population mode / padding / atlas / sourceFontFile) 직렬화 프로퍼티로 설정
+4. `ClearFontAssetData(true)` 로 정적 글리프 11,930자 제거
+5. 아틀라스 텍스처 **서브에셋을 그대로 두고** `Reinitialize(2048, 2048, Alpha8)` 로 크기만 변경
+6. 머티리얼은 `CopyPropertiesFromMaterial(임시에셋.material)` 후 `_MainTex` 만 우리 아틀라스로 되돌림 — 기존 머티리얼은 전부 기본값이었으므로 잃은 설정 없음 (백업에서 확인)
+
+**검증**
+
+- 프로젝트 전체(씬·프리팹·.asset·.cs 문자열)를 훑어 **실제로 쓰이는 한글 514자**(한글 400 + ASCII 95 + 기호)를 수집 → `TryAddCharacters` 로 전부 생성 가능 확인, **누락 0자**
+- 인게임 스코어보드 / 결과 화면 / 설정 화면 캡처 비교 — **번짐 선 사라지고 글자가 선명해짐**
+- 검증 후 글리프 테이블을 다시 비워 두었다 (런타임에 실제 쓰는 글자만 채우도록)
+
+**주의사항**
+
+- `sourceFontFile` 이 비면 **빌드에서 글자가 하나도 안 나온다**. Static 모드에서는 이 참조가 null 이어도 됐지만 Dynamic 에서는 필수다. TTF 임포터의 `includeFontData` 도 켜져 있어야 한다 (현재 True).
+- 에디터에서 Play 할 때마다 쓰인 글자가 에셋에 누적되어 **.asset 파일이 dirty 해진다**. TMP Dynamic 폰트의 정상 동작이며, git 에서 불필요한 변경으로 잡히면 글리프 테이블을 비우고 커밋하면 된다.
+- 아틀라스가 2048 한 장을 넘으면 멀티 아틀라스로 자동 확장된다 (검증 중 514자에서 2장이 됐다). 실제 게임에서 동시에 쓰는 글자는 그보다 훨씬 적다.
+
 ### 14-14. 참고 문서
 
 | 문서 | 용도 |
 |---|---|
 | `README.md` (본 문서) | 설계 명세 + 구현 현황 스냅샷 |
 | `AI_PROMPT_REFERENCE.md` | AI 협업용 — 컨벤션, 시그니처, 명명 규칙, "건드리지 말 것" 목록 |
+| `AIMING_SYSTEM.md` | 조준 시스템 상세 — 3단계 흐름, 게이지 파라미터, ShapeSpin 변환, 커브 물리, 접근성 옵션, 레인 폭 연동 (2026-11-14) |
+| `AIMING_PLAYER_VIEW.md` | 조준 — 플레이어 관점. 위치 → 세기 → (커브) 3단계를 화면에 보이는 대로 설명 (2026-11-14) |
 | `SESSION_2026-06-05.md` | 이전 세션 (최적화·상태 흐름·해상도 UI) 진단·수정·검증 기록 |
 | `NEXT_SESSION.md` | 다음 세션 진입점 — Phase 8 검증 완료 + Build Settings 정리 + 레인 비주얼 작업 반영 (2026-06-19 갱신) |
 | `One-Page Concept Sheet.txt` | 게임 컨셉 / 마일스톤 (M1~M5) |

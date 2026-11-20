@@ -38,8 +38,8 @@ namespace BowlingGame
         private float guideEndZ = 8.3f;
         [SerializeField, Tooltip("경로 샘플 수. 곡선의 부드러움 (직선일 땐 2개면 충분하지만 통일 사용).")]
         [Range(2, 64)] private int samples = 24;
-        [SerializeField, Tooltip("선을 그릴 높이(y). 레인 윗면에서 살짝 띄워 z-fighting 방지.")]
-        private float lineY = 0.03f;
+        [SerializeField, Tooltip("선을 그릴 높이(y). ⚠ 레인 윗면이 y=0.05 이므로 그보다 낮으면 선이 레인 속에 묻혀 보이지 않는다 (2026-11-14 수정 전 0.03 이라 줄곧 안 보였음).")]
+        private float lineY = 0.055f;
         [SerializeField, Tooltip("선 시작 폭 (공 쪽).")]
         private float widthStart = 0.08f;
         [SerializeField, Tooltip("선 끝 폭 (핀 쪽). 시작보다 좁혀 원근감.")]
@@ -48,6 +48,7 @@ namespace BowlingGame
         private float gutterX = 0.533f;
 
         private GameStateManager stateManager;
+        private BallAimer aimer;
         private LineRenderer line;
         private Vector3[] points;
         // AimingPosition 진입 시 SaveSystem.Load 로 1회 캐싱 — 매 프레임 I/O 방지.
@@ -55,15 +56,12 @@ namespace BowlingGame
         private bool isVisible;
 
         /// <summary>
-        /// 레인 폭 프리셋 반영 — 예측선의 거터 절단 위치를 레인 폭에 맞춘다.
-        /// <see cref="LaneWidthPreset.Apply"/> 에서만 호출한다 (중복 호출 시 임계가 제곱으로 늘어남).
-        /// </summary>
-        public void ApplyWidthScale(float scale) => gutterX *= scale;
-
         void Start()
         {
             if (ball == null) ball = GetComponent<BowlingBall>();
             if (ball == null) ball = FindFirstObjectByType<BowlingBall>();
+            if (aimer == null) aimer = GetComponent<BallAimer>();
+            if (aimer == null) aimer = FindFirstObjectByType<BallAimer>();
             if (ball == null)
             {
                 Debug.LogError($"{LogPrefix} BowlingBall 미발견 — 가이드 비활성");
@@ -106,7 +104,12 @@ namespace BowlingGame
         {
             // 조준 사이클 시작 시점에 접근성 설정 1회 캐싱 — 이후 Power/Spin 단계까지 유지.
             if (next == GameState.AimingPosition)
-                guideEnabled = SaveSystem.Load().aimGuideEnabled;
+            {
+                // C 방식에서는 가이드를 강제로 켠다 — 조준선이 보이지 않으면 어느 방향으로
+                // 굴릴지 알 방법이 없어 조작 방식 자체가 성립하지 않는다.
+                guideEnabled = SaveSystem.Load().aimGuideEnabled
+                            || (aimer != null && aimer.SingleInputAiming);
+            }
 
             bool aiming = next == GameState.AimingPosition
                        || next == GameState.AimingPower
@@ -135,6 +138,10 @@ namespace BowlingGame
                 power = powerGauge != null ? powerGauge.ConfirmedNormalized : 0.5f;
             }
 
+            // 조준 방향 — A/B 는 정면, C 는 호 각도에 따른 비스듬한 방향.
+            Vector3 dir = aimer != null ? aimer.CurrentAimDirection : Vector3.forward;
+            float dzPerStep = Mathf.Max(dir.z, 0.0001f);   // 전방 1 진행당 실제 이동량 환산
+
             float totalDz = Mathf.Max(guideEndZ - start.z, 0.5f);
             points[0] = new Vector3(start.x, lineY, start.z);
             int used = 1;
@@ -142,7 +149,8 @@ namespace BowlingGame
             for (int i = 1; i < samples; i++)
             {
                 float dz = totalDz * i / (samples - 1);
-                float x = start.x + ball.PredictLateralOffset(spin, power, dz);
+                // ① 조준 방향으로 전방 dz 진행한 지점 ② 거기에 스핀 커브 오프셋을 더한다
+                float x = start.x + dir.x * (dz / dzPerStep) + ball.PredictLateralOffset(spin, power, dz);
 
                 // 거터 진입 — 경계에 클램프한 마지막 점을 찍고 가이드 종료 (거터행이 한눈에 보이도록).
                 bool gutter = Mathf.Abs(x) > gutterX;

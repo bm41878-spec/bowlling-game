@@ -21,6 +21,21 @@ namespace BowlingGame
         private const string FileName = "save.json";
         private const string LogPrefix = "[SaveSystem]";
 
+        // 메모리 캐시 — Load() 는 한 게임에 수십 번 호출된다 (상태 전이마다 설정 조회).
+        // 매번 파일 I/O + JSON 파싱을 하던 것을 프로세스당 1회로 줄인다.
+        // Save() 가 캐시를 갱신하므로 저장→로드 왕복에서도 항상 최신값이 나온다.
+        // ⚠ 반환 인스턴스는 공유된다 — 호출자가 필드를 고치면 캐시에도 반영된다.
+        //   이는 "UI 가 _saveCache 를 고치고 Save 한다" 는 기존 사용 패턴과 일치하므로 의도된 동작이다.
+        //   외부에서 save.json 을 직접 바꿨다면 InvalidateCache() 로 버릴 것.
+        private static SaveData _cache;
+
+        /// <summary>메모리 캐시를 버린다. 게임 밖에서 save.json 을 직접 수정한 경우에만 필요.</summary>
+        public static void InvalidateCache()
+        {
+            _cache = null;
+            Debug.Log($"{LogPrefix} 캐시 무효화");
+        }
+
         // WebGL 빌드에서는 File.IO 대신 PlayerPrefs(IndexedDB 자동 sync) 를 사용한다.
         private const string PlayerPrefsKey = "BowlingGame.SaveData";
 
@@ -64,6 +79,14 @@ namespace BowlingGame
         /// </summary>
         public static SaveData Load()
         {
+            if (_cache != null) return _cache;
+            _cache = LoadFromStorage();
+            return _cache;
+        }
+
+        // 실제 저장소 접근 — 캐시가 비었을 때만 호출된다.
+        private static SaveData LoadFromStorage()
+        {
             try
             {
                 if (!StorageExists())
@@ -88,6 +111,9 @@ namespace BowlingGame
 
                 // 디스플레이 필드 마이그레이션 — uiScale==0 (sentinel, 의미상 불가능 값) 감지 시 디스플레이 4필드 일괄 기본값으로 복원.
                 NormalizeDisplay(data);
+
+                // 조작 방식 마이그레이션 — 구 spinControlEnabled(bool) → controlScheme(int).
+                NormalizeControlScheme(data);
 
                 Debug.Log($"{LogPrefix} 로드 완료 — 기록 {data.highScores.Count}건 (version {data.version})");
                 return data;
@@ -114,6 +140,7 @@ namespace BowlingGame
             {
                 string json = JsonUtility.ToJson(data, prettyPrint: true);
                 WriteAllText(json);
+                _cache = data;   // 저장한 인스턴스를 그대로 캐시 — 이후 Load() 는 파일을 읽지 않는다
                 Debug.Log($"{LogPrefix} 저장 완료 — 기록 {data.highScores?.Count ?? 0}건 → {StorageLocation}");
             }
             catch (Exception e)
@@ -139,6 +166,19 @@ namespace BowlingGame
         // 디스플레이 필드 마이그레이션 — uiScale 은 0 이 의미상 불가능하므로 sentinel 로 활용.
         // 구 save.json (디스플레이 필드 없음) 에서는 JsonUtility 가 모든 필드를 0 으로 두므로 uiScale==0 감지 시
         // 디스플레이 4필드를 모두 기본값으로 복원한다 (개별 필드 0 분기 대신 일괄 처리 — 부분 수정 상태가 없는 영역이라 안전).
+        // 구 save.json 의 spinControlEnabled(bool) 를 controlScheme(int) 으로 1회 옮긴다.
+        // controlScheme 이 아직 기본값(0=A) 인데 구 플래그가 켜져 있으면 B(위치+세기+커브) 로 해석한다.
+        // 옮긴 뒤 구 플래그를 내려 두 번 적용되지 않게 한다.
+        private static void NormalizeControlScheme(SaveData data)
+        {
+            if (data.controlScheme != ControlScheme.DefaultIndex) return;
+            if (!data.spinControlEnabled) return;
+
+            data.controlScheme = ControlScheme.PositionPowerSpin;
+            data.spinControlEnabled = false;
+            Debug.Log($"{LogPrefix} 조작 방식 마이그레이션 — 구 커브볼 설정 → B (위치+세기+커브)");
+        }
+
         private static void NormalizeDisplay(SaveData data)
         {
             if (data.uiScale > 0f) return;
